@@ -1,0 +1,47 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%" height="100%" 
+		 xmlns:button="com.partycommittee.control.button.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.util.AgencyCodeUtil;
+			import com.partycommittee.views.agencymgmt.agencyviews.AgencyWindow;
+			import com.partycommittee.vo.PcAgencyVo;
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			override public function set data(value:Object):void {
+				super.data = value;
+				if (value is PcAgencyVo) {
+					agency = value as PcAgencyVo;
+				}
+			}
+			
+			private function onUpdateBtnClick():void {
+				if (!agency) {
+					return;
+				}
+				var win:AgencyWindow = new AgencyWindow();
+				win.agency = agency;
+				win.title = "修改" + AgencyCodeUtil.getAgencyCodeDes(agency.codeId);
+				PopupMgr.instance.popupWindow(win);
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<button:PcButton label="修改" horizontalCenter="0" verticalCenter="0"
+					 click="onUpdateBtnClick()"/>
+</mx:Canvas>

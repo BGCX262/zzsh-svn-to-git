@@ -1,0 +1,84 @@
+@namespace "library://ns.adobe.com/flex/mx";
+
+global
+{
+	borderStyle: none;
+	fontFamily: Arial Black;
+	fontSize: 12;
+	color: #000000;
+}
+
+Application 
+{
+	backgroundColor: #ffffff;
+}
+
+Accordion {
+	headerHeight: 28;
+	backgroundAlpha: 0.8;
+	highlightAlphas: 0.4, 0;
+	textRollOverColor: #ff6600;
+	textSelectedColor: #3366ff;
+}
+
+.mainCanvas
+{
+	backgroundColor: #ffffff;
+}
+
+.accrodionHeader
+{
+	textAlign: center;
+	fontWeight: bold;
+	chromeColor: #ffffff;
+	color: #000000;
+	borderColor: #000000;
+	textRollOverColor: #000000;
+	textSelectedColor: #000000;
+}
+
+
+TextInput
+{
+	borderStyle: inset;
+}
+
+List
+{
+	contentBackgroundColor: #ffffff;
+	contentBackgroundAlpha: 1;
+	selectionColor: #FFCC00;
+	rollOverColor: #ffffdd;
+}
+
+AdvancedDataGrid
+{
+	horizontalGridLineColor: #01abb3; 
+	headerColors: #cccccc, #e6eeee;
+	headerHeight: 28; 
+	textAlign: center; 
+	rowHeight: 26;
+}
+
+.dataGridHeader {
+	color: #000000;
+	fontSize: 14;
+}
+
+
+.panelTitle
+{
+	color: #ffffff;
+	fontWeight: bold;
+}
+
+Alert
+{
+	buttonStyleName: "pcButton";
+}
+
+Panel
+{
+	cornerRadius: 10;
+	titleBackgroundSkin: ClassReference("com.partycommittee.skin.PanelHeaderSkin");
+}

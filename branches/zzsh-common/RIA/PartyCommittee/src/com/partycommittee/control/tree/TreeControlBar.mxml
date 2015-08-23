@@ -1,0 +1,167 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 width="100%" 
+		 xmlns:button="com.partycommittee.control.button.*"
+		 creationComplete="onCreationCompleted()">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.manager.tree.TreeContextMenuMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.AgencyCodeUtil;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.views.agencymgmt.agencyviews.AgencyWindow;
+			import com.partycommittee.vo.PcAgencyVo;
+			
+			import mx.controls.Menu;
+			import mx.core.FlexGlobals;
+			import mx.events.FlexEvent;
+			import mx.events.MenuEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.events.ResizeEvent;
+			
+			[Bindable]
+			public var model:ModelLocator = ModelLocator.getInstance();
+			
+			private function onCreationCompleted():void {
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+			}
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+				updateDisplay();
+			}
+			
+			private function updateDisplay():void {
+				
+				deleteBtn.enabled = false;
+				
+				moveBtn.enabled = false;				
+				
+				if (!agency) {
+					createBtn.enabled = false;
+					updateBtn.enabled = false;
+					return;
+				}
+				createBtn.enabled = true;
+				updateBtn.enabled = true;
+				if (agency.codeId == PCConst.AGENCY_CODE_BRANCH) {
+					deleteBtn.enabled = true;
+					moveBtn.enabled = true;
+				}
+			}
+			
+			private function onPropertyChanged(event:PropertyChangeEvent):void {
+				if (event.property == "focusAgencyVo") {
+					agency = model.focusAgencyVo;
+				}
+			}
+			
+			private var createMenu:Menu;
+			private function onCreateBtnClick():void {
+				if (!agency) {
+					return;
+				}
+				createMenu = Menu.createMenu(FlexGlobals.topLevelApplication.root, createMenuItems());
+				createMenu.labelField = "label";
+				createMenu.addEventListener(MenuEvent.ITEM_CLICK, onMenuItemClick);
+				createMenu.addEventListener(FlexEvent.CREATION_COMPLETE, onMenuCreated);
+				var localPoint:Point = localToGlobal(new Point(this.mouseX, this.mouseY));
+				createMenu.show(localPoint.x, localPoint.y - createMenu.height);
+			}
+			
+			private function onMenuCreated(event:FlexEvent):void {
+				if (createMenu && createMenu.isPopUp) {
+					var localPoint:Point = localToGlobal(new Point(this.mouseX, this.mouseY));
+					createMenu.move(localPoint.x, localPoint.y - createMenu.height);
+				}
+			}
+			
+			private function onMenuItemClick(event:MenuEvent):void {
+				if (!event.item.hasOwnProperty('id')) {
+					return;
+				}
+				var agencyCodeId:Number = event.item.id as Number;
+				var title:String = "新建" + AgencyCodeUtil.getAgencyCodeDes(agencyCodeId);
+				var win:AgencyWindow = new AgencyWindow();
+				win.type = CRUDEventType.CREATE;
+				win.title = title;
+				win.agencyCodeId = agencyCodeId;
+				win.parentAgency = agency;
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+//			private var createFirstBranchMenuItem:Object = {id:PCConst.AGENCY_CODE_FIRSTBRANCH, label:"建立第一党支部"};
+			private var createBasicMenuItem:Object = {id:PCConst.AGENCY_CODE_BASICCOMMITTEES, label:"建立基层党委"};
+			private var createBranchMenuItem:Object = {id:PCConst.AGENCY_CODE_BRANCH, label:"建立党支部"};
+			private var createEJDWMenuItem:Object = {id:PCConst.AGENCY_CODE_EJDW, label:"建立二级党委"};
+			private var createGaneralBranchMenuItem:Object = {id:PCConst.AGENCY_CODE_GANERALBRANCH, label:"建立党总支部"};
+			private var createTeamMenuItem:Object = {id:PCConst.AGENCY_CODE_TEAM, label:"建立党小组"};
+			private function createMenuItems():Array {
+				if (!agency) {
+					return null;
+				}
+				var menuItems:Array = new Array();
+				switch (agency.codeId) {
+					case PCConst.AGENCY_CODE_BOARDCOMMITTEES:
+						menuItems.push(createBasicMenuItem, createBranchMenuItem);
+						break;
+					case PCConst.AGENCY_CODE_BASICCOMMITTEES:
+						menuItems.push(createEJDWMenuItem, createGaneralBranchMenuItem, createBranchMenuItem);
+						break;
+					case PCConst.AGENCY_CODE_EJDW:
+						menuItems.push(createBranchMenuItem);
+						break;
+					case PCConst.AGENCY_CODE_BRANCH:
+//						menuItems.push(createTeamMenuItem);
+						break;
+					case PCConst.AGENCY_CODE_FIRSTBRANCH:
+						menuItems.push(createTeamMenuItem);
+						break;
+					case PCConst.AGENCY_CODE_GANERALBRANCH:
+						menuItems.push(createBranchMenuItem);
+						break;
+					case PCConst.AGENCY_CODE_TEAM:
+						break;
+				}
+				return menuItems;
+			}
+			
+			private function onDeleteBtnClick():void {
+				if (agency.codeId == PCConst.AGENCY_CODE_BRANCH) {
+					TreeContextMenuMgr.getInstance().onDelete(null);
+				}
+			}
+			
+			private function onUpdateBtnClick():void {
+				TreeContextMenuMgr.getInstance().onUpdate(null);
+			}		
+			
+			private function onMoveBtnClick():void {
+				if (agency.codeId == PCConst.AGENCY_CODE_BRANCH) {
+					TreeContextMenuMgr.getInstance().onMove(null);
+				}
+			}			
+						
+			private function onRevacationBtnClick():void {
+				
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<button:PcButton id="createBtn" label="建立" enabled="false" click="onCreateBtnClick()"/>
+	<button:PcButton id="updateBtn" label="修改" enabled="false" click="onUpdateBtnClick()"/>
+	<button:PcButton id="moveBtn" label="划转" enabled="false" click="onMoveBtnClick()"/>
+	<button:PcButton id="deleteBtn" label="撤销" enabled="false" click="onDeleteBtnClick()"/>
+	<!--<button:PcButton id="revacationBtn" label="撤销" enabled="false" click="onRevacationBtnClick()"/>-->
+</mx:HBox>

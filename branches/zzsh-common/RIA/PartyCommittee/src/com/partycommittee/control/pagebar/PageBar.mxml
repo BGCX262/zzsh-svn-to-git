@@ -1,0 +1,82 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%" height="24"
+		 verticalAlign="middle" horizontalGap="0" horizontalAlign="left"
+		 visible="{page}">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.vo.page.PageHelperVo;
+			
+			import mx.events.PropertyChangeEvent;
+			import mx.events.PropertyChangeEventKind;
+			
+			[Event(name="pageChange", type="flash.events.Event")]
+			
+			[Bindable]
+			private var pages:Array;
+			
+			[Bindable]
+			private var totalRecordStr:String;
+			
+			private var _page:PageHelperVo;
+			[Bindable]
+			public function get page():PageHelperVo {
+				return this._page;
+			}
+			public function set page(value:PageHelperVo):void {
+				this._page = value;
+				updateData();
+			}
+			
+			private function updateData():void {
+				pages = new Array();
+				if (this._page.pageCount) {
+					for (var i:int = 0; i < this._page.pageCount; i++) {
+						pages.push(i + 1);
+					}
+				}
+				if (this._page.recordCount) {
+					totalRecordStr = "总记录数:" + this._page.recordCount;
+				}
+			}
+			
+			private function getData(index:Number):void {
+				page.pageIndex = index;
+//				dispatchEvent(new Event("pageChange"));
+				dispatchEvent(new PropertyChangeEvent(PropertyChangeEvent.PROPERTY_CHANGE, false, false, PropertyChangeEventKind.UPDATE, "pageChange"));
+			}
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:Spacer width="6"/> 
+	<mx:LinkButton label="首页" 
+				   enabled="{page.pageIndex != 1}" 
+				   click="getData(1)"/> 
+	<mx:LinkButton label="上一页" 
+				   enabled="{page.pageIndex &gt; 1}" 
+				   click="getData(page.pageIndex - 1)"/> 
+	<mx:Repeater id="prepeater" 
+				 dataProvider="{pages}" 
+				 count="10" 
+				 startingIndex="{(page.pageIndex - 3 &lt; 0) ? 0 : (page.pageIndex - 3)}"> 
+		<mx:LinkButton label="{(prepeater.currentIndex + 1).toString()}" 
+					   enabled="{int(prepeater.currentIndex) + 1 != page.pageIndex}" 
+					   click="getData(event.currentTarget.repeaterIndex + 1)"/> 
+	</mx:Repeater> 
+	<mx:LinkButton label="下一页" 
+				   enabled="{page.pageIndex &lt; page.pageCount}" 
+				   click="getData(page.pageIndex + 1)"/> 
+	<mx:LinkButton label="末页" 
+				   enabled="{page.pageIndex != page.pageCount &amp;&amp; page.pageCount != 0}" 
+				   click="getData(page.pageCount)"/> 
+	<s:Spacer width="100%"/>
+	<mx:Label text="{totalRecordStr}"/>
+	
+</mx:HBox>

@@ -1,0 +1,578 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx"
+		   styleName="mainCanvas"
+		   width="100%" height="100%" 
+		   label="年度计划"
+		   creationComplete="onCreationCompleted()"
+		   xmlns:button="com.partycommittee.control.button.*" 
+		   xmlns:richtexttoolbar="com.partycommittee.control.richtexttoolbar.*"
+		   verticalScrollPolicy="auto">
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.events.PcRemindLockEvent;
+			import com.partycommittee.events.PcWordEvent;
+			import com.partycommittee.events.PcWorkPlanEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.DateUtil;
+			import com.partycommittee.util.WorkPlanCodeUtil;
+			import com.partycommittee.util.WorkPlanStatusUtil;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.component.ReturnFormWindow;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcRemindConfigVo;
+			import com.partycommittee.vo.PcRemindLockVo;
+			import com.partycommittee.vo.PcWorkPlanContentVo;
+			import com.partycommittee.vo.PcWorkPlanVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.events.PropertyChangeEvent;
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var workPlanStatusLbl:String;
+			
+			[Bindable]
+			public var browseMode:Boolean = false;
+			
+			[Bindable]
+			private var year:Number;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			private var _workPlan:PcWorkPlanVo;
+			[Bindable]
+			public function get workPlan():PcWorkPlanVo {
+				return this._workPlan;
+			}
+			public function set workPlan(value:PcWorkPlanVo):void {
+				this._workPlan = value;
+			}
+			
+			[Bindable]
+			private var yearDp:ArrayCollection;
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			private function onCreationCompleted():void {
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+				addEventListener(FlexEvent.SHOW, onViewShow);
+				year = model.reportYear;
+				if (this.tab && this.tab.selectedChild == this) {
+					refresh();
+				}	
+			}
+			
+			private function onViewShow(event:FlexEvent):void {
+				if (this.tab && this.tab.selectedChild == this) {
+					refresh();
+				}
+			}
+			
+			private function resetData():void {
+				workPlan = null;
+				personTxt.text = "";
+				textArea.htmlText = "";
+				workPlanStatusLbl = "";
+			}
+			
+			private function onPropertyChanged(event:PropertyChangeEvent):void {
+//				if (event.property == "reportYear"|| event.property == "focusAgencyVo") {
+				if (event.property == "focusAgencyVo") {
+					this.year = model.reportYear;
+					if (this.tab && this.tab.selectedChild == this) {
+						refresh();
+					}
+				}
+			}
+			
+			private function initRemindLock():void {
+				
+				// 检查上报期限，分几种情况
+				//	1. 未到上报期限 -> 锁定
+				var vo:PcRemindConfigVo = getRemindVo(1);
+				var cur_date = DateUtilExt.now();
+				var startDate:Date = new Date((model.reportYear + vo.startYear).toString(), vo.startMonth - 1, vo.startDay, 23, 59, 59 );
+				if (DateUtilExt.before(cur_date, startDate)) {
+					btn_commit.enabled = false;
+					remindTxt.htmlText = "<font color='#ff0000'>说明:未到上报期限</font>";
+					remindTxt.visible = true;
+				} else {
+					//	2. 已到上报期限 -> 打开
+					//	3. 已过上报期限 -> 锁定
+					//	4. 已过上报期限，解锁 -> 打开
+					//	5. 已过上报期限，并到延长时限 -> 锁定
+					var remindLockEvt:PcRemindLockEvent = new PcRemindLockEvent(PcRemindLockEvent.GET_REMIND_LOCK_BY_ID);
+					remindLockEvt.agencyId = agency.id;
+					remindLockEvt.year = model.reportYear;
+					remindLockEvt.quarter = 0;
+					remindLockEvt.month = 0;
+					remindLockEvt.typeId = 1;
+					remindLockEvt.successCallback = getRemindLockSuccess;
+					remindLockEvt.failureCallback = getRemindLockFailure
+					remindLockEvt.dispatch();
+				}
+			}
+			
+			private function getRemindLockSuccess(data:Object, evt:PcRemindLockEvent):void {
+				// 检查上报期限，分几种情况
+				//	1. 未到上报期限 -> 锁定
+				//	2. 已到上报期限 -> 打开
+				//	3. 已过上报期限 -> 锁定
+				//	4. 已过上报期限，解锁 -> 打开
+				//	5. 已过上报期限，并到延长时限 -> 锁定
+				if (data) {
+					var lock_vo:PcRemindLockVo = data as PcRemindLockVo;
+					
+					var config_vo:PcRemindConfigVo = getRemindVo(1);
+					var cur_date = DateUtilExt.now();
+					
+					//	3. 已过上报期限 -> 锁定
+					if (lock_vo.statusId == 9) {
+//						var endDate:Date = new Date((model.reportYear + config_vo.endYear).toString(), config_vo.endMonth - 1, config_vo.endDay, 23, 59, 59 );
+//						if (DateUtilExt.after(cur_date, endDate)) {
+							btn_commit.enabled = false;
+							remindTxt.htmlText = "<font color='#ff0000'>说明:超过上报期限,已锁定</font>";
+							remindTxt.visible = true;
+//						}
+					} else if (lock_vo.statusId == 8) {
+						//	5. 已过上报期限，解锁后，并到延长时限 -> 锁定
+						if (lock_vo.delayDate && lock_vo.delayDate.length > 0) {
+							var delayDate:Date = new Date(lock_vo.delayDate);
+							if (DateUtilExt.after(cur_date, delayDate)) {
+								btn_commit.enabled = false;
+								remindTxt.htmlText = "<font color='#ff0000'>说明:超过上报期限,已锁定</font>";
+								remindTxt.visible = true;
+							}
+						}
+					}
+				}
+			}
+			
+			private function getRemindLockFailure(data:Object, evt:PcRemindLockEvent):void {
+				btn_commit.enabled = true;
+				remindTxt.text = "";
+				remindTxt.visible = false;
+			}
+
+			public function getRemindVo(typeId:Number):PcRemindConfigVo {
+				var model:ModelLocator = ModelLocator.getInstance();
+				var dd:ArrayCollection = model.remindConfigCollection;
+				for(var i = 0; i < dd.length; i++ ) {
+					if ( (dd.getItemAt(i) as PcRemindConfigVo).typeId == typeId) {
+						return dd.getItemAt(i) as PcRemindConfigVo
+					}
+				}
+				return null;
+			}			
+			
+			private function refresh():void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_WORKPLAN_YEARLY, agency);
+				workPlanEvt.year = year;
+				workPlanEvt.successCallback = onGetYearWorkPlanSuccess;
+				workPlanEvt.failureCallback = onGetYearWorkPlanFailure;
+				this.enabled = false;
+				workPlanEvt.dispatch();
+			}
+			
+			private function onGetYearWorkPlanSuccess(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				yearwpViewStack.selectedChild = reportForm;
+				
+				if (!data) {
+					resetData();
+					initRemindLock();				
+					return;
+				}
+				workPlan = null;
+				workPlan = data as PcWorkPlanVo;
+				if (!workPlan) {
+					return;
+				}
+				
+				workPlanStatusLbl =  WorkPlanStatusUtil.getWorkPlanStatusDes(workPlan.statusId);
+				if (workPlanStatusLbl != "") {
+					workPlanStatusLbl = " (" + workPlanStatusLbl + ")";
+				}
+
+				if (workPlan.statusId < 3) {
+					yearwpViewStack.selectedChild = reportForm;
+					
+					if (workPlan.workPlanContent) {
+						personTxt.text = workPlan.workPlanContent.memberName;
+						textArea.htmlText = workPlan.workPlanContent.content;
+					}
+					
+					initRemindLock();
+					
+				} else {
+					yearwpViewStack.selectedChild = browseForm;
+					
+					if (workPlan.workPlanContent) {
+						b_personTxt.text =  "填写人：" + workPlan.workPlanContent.memberName;
+						b_textArea.htmlText = workPlan.workPlanContent.content;
+						dateTxt.text = "日期：" + DateUtil.toISOString(workPlan.workPlanContent.updatetime);
+					}						
+					if (workPlan.statusId >= 4) {
+						getEvaluateInfo(workPlan);
+					}
+				}
+			}
+			
+			private function onGetYearWorkPlanFailure():void {
+				this.enabled = true;
+			}			
+			
+			private function getEvaluateInfo(workPlan:PcWorkPlanVo):void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_CONTENT_INFO);
+				workPlanEvt.workPlan = workPlan;
+				workPlanEvt.contentType = 3;
+				workPlanEvt.successCallback = onGetEvaluateInfoSuccess;
+				workPlanEvt.failureCallback = onGetEvaluateInfoFailure;
+				workPlanEvt.dispatch();
+			}
+			
+			private function onGetEvaluateInfoSuccess(data:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				var workplanContent:PcWorkPlanContentVo = data as PcWorkPlanContentVo;
+				if (!workplanContent) {
+					return;
+				}
+				browseForm_evaluate.percentWidth = 100;
+				browseForm_evaluate.percentHeight = 30;
+				browseForm_evaluate.visible = true;
+				b_textArea_eva.htmlText = workplanContent.content;
+				b_personTxt_eva.text = "评语主体：" + workplanContent.memberName;
+				dateTxt_eva.text = "日期：" + DateUtil.toISOString(workplanContent.updatetime);
+				
+				if (workPlan.statusId == 5) {
+					getRateInfo();
+				}
+			}
+			
+			private function onGetEvaluateInfoFailure(info:Object, evt:PcWorkPlanEvent):void {
+				Alert.show("获取内容失败！");
+			}			
+			
+			private function getRateInfo():void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_CONTENT_INFO);
+				workPlanEvt.workPlan = workPlan;
+				workPlanEvt.contentType = 4;
+				workPlanEvt.successCallback = onGetRateInfoSuccess;
+				workPlanEvt.failureCallback = onGetRateInfoFailure;
+				this.enabled = false;
+				workPlanEvt.dispatch();
+			}
+			
+			private function onGetRateInfoSuccess(data:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				if (data as PcWorkPlanContentVo) {
+					rate_box.percentWidth = 100;
+					rate_box.percentHeight = 20;
+					var contentVo:PcWorkPlanContentVo = data as PcWorkPlanContentVo;
+					this.ratePersonTxt.text = "评价主体：" + contentVo.memberName;
+					//this.rateTextArea.htmlText = contentVo.content;
+					rateGroup.selectedValue = contentVo.content;
+					dateTxt_rate.text = "日期：" + DateUtil.toISOString(contentVo.updatetime);
+					rate_box.visible = true;
+				}
+			}
+			
+			private function onGetRateInfoFailure(info:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+			}				
+
+			private function formValidate():Boolean {
+				if (textArea.htmlText.length == 0) {
+					Alert.show("年度计划不能为空!");
+					return false;
+				}
+				
+				if (personTxt.text.length == 0) {
+					Alert.show("填写人不能为空!");
+					return false;
+				}
+				
+				return true;
+			}
+			
+			private function onSaveAndCommit():void {
+				if (formValidate() == true) {	
+					if (workPlan) {
+						doUpdate(true);
+					} else {
+						doCreate(true);
+					}
+				}
+			}
+
+			private function onSaveWithoutSubmit():void {
+				if (formValidate() == true) {	
+					if (workPlan) {
+						doUpdate();
+					} else {
+						doCreate();
+					}
+				}
+			}
+			
+			private function doUpdate(isCommit:Boolean = false):void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(CRUDEventType.UPDATE);
+				var updateWorkPlan:PcWorkPlanVo = getUpdateWorkPlan();
+				updateWorkPlan.statusId = isCommit ? 3 : 1;
+				workPlanEvt.workPlan = updateWorkPlan;
+				workPlanEvt.successCallback = onWorkPlanUpdateSuccess;
+				workPlanEvt.failureCallback = onWorkPlanUpdateFailure;
+				
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(CRUDEventType.UPDATE);
+				var updateWorkPlan:PcWorkPlanVo = getUpdateWorkPlan();
+				updateWorkPlan.statusId = isCommit ? 3 : 1;
+				workPlanEvt.workPlan = updateWorkPlan;
+				workPlanEvt.successCallback = onWorkPlanUpdateSuccess;
+				workPlanEvt.failureCallback = onWorkPlanUpdateFailure;				
+				
+				this.enabled = false;
+				workPlanEvt.dispatch();
+			}
+			
+			private function doCreate(isCommit:Boolean = false):void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(CRUDEventType.CREATE);
+				var newWorkPlan:PcWorkPlanVo = getNewWorkPlan();
+				newWorkPlan.statusId = isCommit ? 3 : 1;
+				workPlanEvt.workPlan = newWorkPlan;
+				workPlanEvt.successCallback = onWorkPlanCreateSuccess;
+				workPlanEvt.failureCallback = onWorkPlanCreateFailure;
+				this.enabled = false;
+				workPlanEvt.dispatch();
+			}
+			
+			private function onWorkPlanCreateSuccess(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				refresh();
+			}
+			
+			private function onWorkPlanCreateFailure(info:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show("保存年度工作计划失败！");
+			}
+			
+			private function onWorkPlanUpdateSuccess(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				refresh();
+			}
+			
+			private function onWorkPlanUpdateFailure(info:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show("修改年度工作计划失败！");
+			}
+			
+			private function getNewWorkPlan():PcWorkPlanVo {
+				var workPlan:PcWorkPlanVo = new PcWorkPlanVo();
+				workPlan.typeId = PCConst.WORKPLAN_TYPE_YEARLY;
+				workPlan.year = year;
+				workPlan.agencyId = agency.id;
+				workPlan.workPlanContent = getWorkPlanContent();
+				return workPlan;
+			}
+			
+			private function getUpdateWorkPlan():PcWorkPlanVo {
+				workPlan.workPlanContent.memberName = personTxt.text;
+				workPlan.workPlanContent.content = textArea.htmlText;
+				return workPlan;
+			}
+			
+			private function getWorkPlanContent():PcWorkPlanContentVo {
+				var workPlanContent:PcWorkPlanContentVo = new PcWorkPlanContentVo();
+				workPlanContent.content = textArea.htmlText;
+				workPlanContent.memberName = personTxt.text;
+				workPlanContent.type = PCConst.WORKFLOW_TYPE_REPORT;
+				return workPlanContent;
+			}
+			
+			private function onBrowseApproval():void {
+				var commentView:CommentView = new CommentView();
+				commentView.workPlan = workPlan;
+				PopupMgr.instance.popupWindow(commentView);
+			}
+
+			private function onGetReturnInfo():void {
+				var title:String = '驳回原因';
+				var win:ReturnFormWindow = new ReturnFormWindow();
+				win.title = title;
+				win.reportId = workPlan.id;
+				win.type = 'workplan';
+				win.modelType = 'browse';
+				PopupMgr.instance.popupWindow(win);
+			}	
+			
+			private function onExportToDoc():void {
+
+				var evt:PcWordEvent = new PcWordEvent(PcWordEvent.EXPORT_WORD_FOR_WORKPLAN);
+				evt.zid = workPlan.id;
+				evt.successCallback = onExportWordAllSuccess;
+				evt.failureCallback = onExportWordAllFailure;					
+				
+				evt.dispatch();
+			}		
+			
+			private function onExportWordAllSuccess(data:Object, evt:PcWordEvent):void {
+				var filename = data as String;
+				
+				if (!filename) return;
+				
+				var url = "wordExport.jsp";				
+				var variables:URLVariables = new URLVariables();
+				var title = year.toString() + "年度计划";
+				variables.filename = filename;
+				variables.title = title;
+				var u:URLRequest = new URLRequest(url);   
+				u.data = variables;   
+				u.method = URLRequestMethod.GET;
+				navigateToURL(u,"_self");
+			}
+			
+			private function onExportWordAllFailure(info:Object, evt:PcWordEvent):void {
+//				Alert.show("onExportWordAllFailure");
+			}				
+			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<s:RadioButtonGroup id="rateGroup" />  
+	</fx:Declarations>
+	<mx:VBox width="100%" height="100%" verticalScrollPolicy="auto">
+		<mx:HBox width="100%" horizontalAlign="center"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label fontSize="20" fontWeight="bold" text="{year + '年度工作计划'}"/>
+			<mx:Label fontSize="20" fontWeight="bold"
+					  text="{workPlanStatusLbl}"/>
+		</mx:HBox>
+		<mx:ViewStack id="yearwpViewStack" width="100%" height="100%" creationPolicy="all"
+					  left="6" right="6" top="6" bottom="6">
+			<mx:VBox id="reportForm" width="100%" height="100%"
+					 left="6" right="6" top="6" bottom="6"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="auto">
+	
+				
+
+				<richtexttoolbar:PopupRichTextToolBar width="100%" target="{textArea}" visible="{!workPlan || workPlan.statusId &lt; 3 }"/>
+				<mx:TextArea id="textArea" width="100%" height="100%"
+							 editable="{!workPlan || workPlan.statusId &lt; 3}"/>
+				
+				<mx:HBox horizontalAlign="left" width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+					<mx:Label text="填写人："/>
+					<mx:TextInput id="personTxt" width="200"
+								  editable="{!workPlan || workPlan.statusId &lt; 3}"/>
+				</mx:HBox>	
+
+			
+				<mx:ControlBar width="100%" horizontalAlign="center" verticalAlign="middle"
+							   visible="{!browseMode}" includeInLayout="{!browseMode}">
+					<button:PcButton label="暂存" click="onSaveWithoutSubmit()"
+									 visible="{!workPlan || workPlan.statusId &lt; 3}"/>
+					<button:PcButton label="上报" id="btn_commit" click="onSaveAndCommit()"
+									 visible="{!workPlan || workPlan.statusId &lt; 3}"/>
+					<mx:Label id="remindTxt" text="" visible="false" includeInLayout="{!browseMode}"/>
+					<button:PcButton label="查看驳回原因" id="btn_return" click="onGetReturnInfo()"
+									 visible="{workPlan &amp;&amp; workPlan.statusId == 2}" includeInLayout="{!browseMode}"/>
+				</mx:ControlBar>
+			</mx:VBox>
+			
+			<mx:VBox id="browseForm" width="100%" height="100%"
+					 left="6" right="6" top="6" bottom="6"
+					  creationPolicy="all"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="auto">			
+				
+				
+				<mx:HBox width="100%" horizontalAlign="left" height="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+					<mx:VBox left="6" right="6" top="6" bottom="6">
+						<mx:Label text="年"     />
+						<mx:Label text="度"     />
+						<mx:Label text="工"     />
+						<mx:Label text="作"     />
+						<mx:Label text="计"     />
+						<mx:Label text="划"     />
+					</mx:VBox>
+					
+					
+					
+					<mx:VBox width="97%" height="100%">
+						<mx:TextArea id="b_textArea" width="100%" height="100%"
+									 editable="{!workPlan || workPlan.statusId &lt; 3}"/>
+						<mx:HBox  horizontalCenter="0" width="100%">
+							<mx:Label id="b_personTxt" text="填写人："/>
+							<mx:Spacer width="100%"/>
+							<mx:Label id="dateTxt" text="日期："/>
+						</mx:HBox>							
+					</mx:VBox>
+				</mx:HBox>					
+				
+				
+				<mx:HBox id="browseForm_evaluate" horizontalAlign="left" width="0" height="0" horizontalScrollPolicy="off" verticalScrollPolicy="off" visible="false">
+					<mx:VBox left="6" right="6" top="6" bottom="6">
+						<mx:Label text="评"     />
+						<mx:Label text="语"     />
+					</mx:VBox>
+					
+					
+					<mx:VBox width="97%" height="100%">
+						<mx:TextArea id="b_textArea_eva" width="100%" height="100%"
+									 editable="false"/>
+						<mx:HBox  horizontalCenter="0" width="100%">
+							<mx:Label right="0" id="b_personTxt_eva" text="评语主体："/>
+							<mx:Spacer width="100%"/>
+							<mx:Label left="0"   id="dateTxt_eva"/>
+						</mx:HBox>	
+					</mx:VBox>
+				</mx:HBox>				
+
+				<mx:HBox id="rate_box" horizontalAlign="left" width="0" height="0" horizontalScrollPolicy="off" verticalScrollPolicy="off" visible="false">
+					<mx:VBox left="6" right="6" top="6" bottom="6">
+						<mx:Label text="评"     />
+						<mx:Label text="价"     />
+					</mx:VBox>					
+					<mx:VBox width="97%" height="100%">
+						<mx:HBox  horizontalCenter="0" width="100%">
+							<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate1" selected="true" label="好" value="1" /> 
+							<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate2" label="较好" value="2"/>
+							<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate3" label="一般" value="3"/>
+							<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate4" label="差" value="4"/>
+						</mx:HBox>
+						<mx:HBox  horizontalCenter="0" width="100%">
+							<mx:Label right="0" id="ratePersonTxt" text="评价主体："/>
+							<mx:Spacer width="100%"/>
+							<mx:Label left="0"   id="dateTxt_rate"/>
+						</mx:HBox>
+					</mx:VBox>
+				</mx:HBox>		
+				
+				<mx:ControlBar width="100%" horizontalAlign="center" verticalAlign="middle">
+					
+					<button:PcButton id="exportForWorkPlan" label="导出年度计划" click="onExportToDoc()"
+									 visible="{workPlan &amp;&amp; workPlan.statusId >= 3 }"/>
+					
+				</mx:ControlBar>
+				
+			</mx:VBox>		
+			
+		</mx:ViewStack>
+	</mx:VBox>
+</mx:Canvas>

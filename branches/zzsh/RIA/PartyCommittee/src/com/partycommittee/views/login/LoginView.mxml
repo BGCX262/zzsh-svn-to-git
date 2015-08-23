@@ -1,0 +1,176 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Box xmlns:fx="http://ns.adobe.com/mxml/2009"
+        xmlns:s="library://ns.adobe.com/flex/spark"
+        xmlns:mx="library://ns.adobe.com/flex/mx" 
+        xmlns:controls="com.hp.client.controls.*"
+        horizontalAlign="center"
+        verticalAlign="middle"
+        creationComplete="onCreationCompleted()">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcUserEvent;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.vo.PcUserVo;
+			
+			import mx.controls.Alert;
+			
+			public static const CACHE_USERNAME:String = "PartyCommitteeUser";
+			
+			public static const LOGIN_VIEW:String = "loginView";
+			public static const OPERATING_VIEW:String = "operatingView";
+			
+			[Bindable]
+			public var loginUsernameValid:Boolean;
+			[Bindable]
+			public var registerUsernameValid:Boolean;
+			[Bindable]
+			public var registerPasswordValid:Boolean;
+			[Bindable]
+			public var phoneValid:Boolean = true;
+			
+			[Bindable]
+			public var loginTitleString:String = "";
+			[Bindable]
+			public var validateFailureString:String;
+			
+			[Bindable]
+			public var model:ModelLocator = ModelLocator.getInstance();
+			
+			private var shareObj:SharedObject;
+			private function onCreationCompleted():void {
+				shareObj = SharedObject.getLocal(CACHE_USERNAME);
+				if (shareObj) {
+					loginUsernameTextInput.text = shareObj.data.username;
+					//passwordTextInput.text = shareObj.data.password;
+					rememberMeCheckBox.selected = true;
+					loginUsernameValid = true;
+				}
+			}
+			
+			private function loginBtnClick():void {
+				login(getUser());
+			}
+			
+			private var tempUser:PcUserVo;
+			private var timer:Timer;
+			private function login(user:PcUserVo):void {
+				var loginEvent:PcUserEvent = new PcUserEvent(PcUserEvent.LOGIN);
+				loginEvent.user = user;
+				loginEvent.failureCallback = onLoginFailure;
+				loginEvent.dispatch();
+				currentState = OPERATING_VIEW;
+				
+				// Save cookie.
+				if (rememberMeCheckBox.selected) {
+					shareObj.data.username = user.username;
+					//shareObj.data.password = user.password;
+					shareObj.flush();
+				}
+			}
+			
+			private function onLoginFailure(info:Object, evt:PcUserEvent):void {
+				if (info) {
+					Alert.show("登录失败！" + info.toString());
+				} else {
+					Alert.show("用户名或密码错误！");
+					
+				}
+				
+				currentState = LOGIN_VIEW;
+			}
+			
+			private function resetView():void {
+				currentState = LOGIN_VIEW;
+				resetLoginView();
+			}
+			
+			private function resetLoginView():void {
+				loginUsernameTextInput.text = "";
+				passwordTextInput.text = "";
+			}
+			
+			private function getUser():PcUserVo {
+				var user:PcUserVo = new PcUserVo();
+				user.username = loginUsernameTextInput.text;
+				user.password = passwordTextInput.text;
+				return user;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+	</fx:Declarations>
+	
+	<mx:states>
+		<mx:State name="loginView"/>
+		<mx:State name="operatingView"/>
+	</mx:states>
+	
+	<s:Panel id="loginAndRegView"
+ 			 
+			  height="600" width="1024"
+			 
+			  backgroundAlpha="0.5" 
+			   skinClass="com.partycommittee.skin.PanelNoTitleBar">
+		<s:Rect width="100%" height="100%">
+			<s:fill>
+				<s:BitmapFill source="@Embed('/assets/images/login.png')" />
+			</s:fill>
+		</s:Rect>		
+		
+		<!-- Login Form -->
+		<mx:VBox width="100%"
+				 verticalGap="5" horizontalAlign="center"
+				 visible.loginView="true"
+				 includeInLayout.loginView="true"
+				 visible.operatingView="false"
+				 includeInLayout.operatingView="false"
+				 x.loginView="630"
+				 y.loginView="320">
+			<mx:Form width="100%" height="100%">
+				<mx:FormItem required="true" label="用户名:" width="50%" horizontalAlign="center">
+					<mx:TextInput id="loginUsernameTextInput" maxChars="32"
+								  borderStyle="solid" borderColor="#C3C3C3" width="150"/>
+				</mx:FormItem>
+				<mx:FormItem required="true" label="密码:" width="50%" horizontalAlign="center">
+					<mx:TextInput id="passwordTextInput" displayAsPassword="true" maxChars="32"
+								  borderStyle="solid" borderColor="#C3C3C3" width="150"/>
+				</mx:FormItem>
+				<mx:FormItem width="50%" horizontalAlign="right">
+					<mx:HBox>
+					
+					<mx:CheckBox id="rememberMeCheckBox" 
+								 label="记住用户名"
+								 selected="false"/>
+					<mx:ControlBar width="100%" horizontalAlign="right">
+						<mx:Button id="loginButton" label="登录"
+								   click="loginBtnClick()"
+								   enabled="{loginUsernameValid &amp;&amp; passwordTextInput.text != ''}"/>
+					</mx:ControlBar>	
+					</mx:HBox>
+				</mx:FormItem>
+			</mx:Form>
+		</mx:VBox>
+		
+		<!-- Logining View -->
+		<mx:VBox width="280" height="100" 
+				 horizontalAlign="center" verticalAlign="middle"
+				 includeInLayout.loginView="false"
+				 visible.loginView="false"
+				 includeInLayout.operatingView="true"
+				 visible.operatingView="true"
+				 x.operatingView="630"
+				 y.operatingView="320">
+			<mx:Label text="登录中...请稍候" fontWeight="bold" fontSize="18"/>
+			<mx:ProgressBar width="70%" height="20" label="" labelPlacement="center"
+							horizontalCenter="0" verticalCenter="0" indeterminate="true"/>
+		</mx:VBox>
+		
+		<mx:Label alpha="0.8" text="北京市公安局和北京宏景世纪软件有限公司联合开发"
+				  horizontalCenter="360"
+				  verticalCenter="280" />
+	</s:Panel>
+	
+</mx:Box>

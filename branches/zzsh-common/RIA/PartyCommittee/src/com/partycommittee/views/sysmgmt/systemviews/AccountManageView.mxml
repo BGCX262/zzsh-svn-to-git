@@ -1,0 +1,235 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						   xmlns:s="library://ns.adobe.com/flex/spark" 
+						   xmlns:mx="library://ns.adobe.com/flex/mx"
+						   styleName="mainCanvas"
+						   width="100%" height="100%" 
+						   xmlns:button="com.partycommittee.control.button.*" 
+						   xmlns:datagrid="com.partycommittee.control.datagrid.*"
+						   xmlns:filter="com.partycommittee.control.filter.*"
+						   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+						   xmlns:pagebar="com.partycommittee.control.pagebar.*"
+						   creationComplete="onCreationCompleted()">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcUserEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.LblFunctionHelper;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcUserVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			import com.partycommittee.vo.page.PageResultVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			private var dp:ArrayCollection = new ArrayCollection();
+			
+			[Bindable]
+			private var page:PageHelperVo;
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			override protected function onNavigateIn():void {
+				if (agency != model.focusAgencyVo) {
+					agency = model.focusAgencyVo;
+				}
+				
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+				pageBar.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPageBarChanged);
+				refreshData();
+			}
+			
+			
+			override protected function onNavigateOut():void {
+				model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+			}
+			
+			private function onModelChanged(event:PropertyChangeEvent):void {
+				if (event.property == "focusAgencyVo") {
+					if (agency != model.focusAgencyVo) {
+						agency = model.focusAgencyVo;
+//						if (useFilterCk.selected) {
+							refreshData();
+//						}
+					}
+				}
+			}
+			
+			private function onPageBarChanged(event:PropertyChangeEvent):void {
+				if (event.property == "pageChange") {
+					page = pageBar.page;
+					refreshData();
+				}
+			}			
+			
+			private function onCreationCompleted():void {
+				if (!page) {
+					page = new PageHelperVo();
+					page.pageIndex = 1;
+				}
+				pageBar.addEventListener("pageChange", refreshData);
+				
+				if (this.tab && this.tab.selectedChild == this) {
+					onNavigateIn();
+				}	
+				
+			}
+			
+			public function refreshData(evt:* = null):void {
+				if (!agency) return;
+				var userEvt:PcUserEvent = new PcUserEvent();
+				userEvt.page = page;
+//				if (useFilterCk.selected && agency) {
+					userEvt.agency = agency;
+//				}
+				userEvt.successCallback = onGetUsersSuccess;
+				userEvt.failureCallback = onGetUsersFailure;
+				userEvt.dispatch();
+			}
+			
+			private function onGetUsersSuccess(data:Object, evt:PcUserEvent):void {
+//				dp = data as ArrayCollection;
+				var pageResult:PageResultVo = data as PageResultVo;
+				if (!pageResult) {
+					return;
+				}
+				page = pageResult.pageHelper;
+				dp = pageResult.list;
+			}
+			
+			private function onGetUsersFailure(info:Object, evt:PcUserEvent):void {
+				Alert.show(info.toString());
+			}
+			
+			private function addAccount():void {
+				var window:AccountWindow = new AccountWindow();
+				window.type = CRUDEventType.CREATE;
+				window.parentView = this;
+				PopupMgr.instance.popupWindow(window);
+			}
+			
+			private function updateAccount():void {
+				var window:AccountWindow = new AccountWindow();
+				window.type = CRUDEventType.UPDATE;
+				window.title = "修改账号";
+				window.userVo = datagrid.selectedItem as PcUserVo;
+				window.parentView = this;
+				PopupMgr.instance.popupWindow(window);
+			}
+			
+			private function onItemDoubleClick():void {
+				updateAccount();
+			}
+			
+			private var deleteUserList:ArrayCollection = new ArrayCollection();
+			private function removeAccount():void {
+				deleteUserList = new ArrayCollection(datagrid.selectedItems);
+				Alert.show("是否要删除用户" + getSelectedItemNames().join(", ") + "?", "提示", 
+					Alert.OK | Alert.CANCEL, null, onDeleteAlertClose);
+			}
+			
+			private function onDeleteAlertClose(event:CloseEvent):void {
+				if (event.detail == Alert.OK) {
+					doDelete();
+				}
+			}
+			
+			private function doDelete():void {
+				var userEvt:PcUserEvent = new PcUserEvent(CRUDEventType.DELETE, null, deleteUserList);
+				userEvt.successCallback = onDeleteUserSuccess;
+				userEvt.failureCallback = onDeleteUserFailure;
+				this.enabled = false;
+				userEvt.dispatch();
+			}
+			
+			private function onDeleteUserSuccess(data:Object, evt:PcUserEvent):void {
+				this.enabled = true;
+				refreshData();
+			}
+			
+			private function onDeleteUserFailure(info:Object, evt:PcUserEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			private function getSelectedItemNames():Array {
+				var array:Array = new Array();
+				for each (var item:Object in datagrid.selectedItems) {
+					if (item is PcUserVo) {
+						array.push((item as PcUserVo).username);
+					}
+				}
+				return array;
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<navigation:constraintRows>
+		<s:ConstraintRow id="headerRow" height="30"/>
+		<s:ConstraintRow id="mainRow" height="100%"/>
+	</navigation:constraintRows>
+	
+	<mx:Canvas top="headerRow:0" bottom="headerRow:0"
+			   width="100%">
+		<mx:Label fontSize="20" fontWeight="bold"
+				  horizontalCenter="0" verticalCenter="0"
+				  text="账号管理"/>
+	</mx:Canvas>
+	
+	<mx:VBox width="100%" top="mainRow:0" bottom="mainRow:0">
+		<mx:ControlBar width="100%" horizontalAlign="right">
+			<!--<mx:CheckBox id="useFilterCk" label="根据选择组织过滤" change="refreshData()"/>-->
+			<s:Spacer width="100%"/>
+			<button:PcButton label="新增" click="addAccount()"/>
+			<button:PcButton label="修改" click="updateAccount()" enabled="{datagrid.selectedItem}"/>
+			<button:PcButton label="删除" click="removeAccount()" enabled="{datagrid.selectedItem}"/>
+		</mx:ControlBar>
+		<mx:AdvancedDataGrid id="datagrid" width="100%" height="100%" 
+										   headerStyleName="dataGridHeader"
+										   dataProvider="{dp}"
+										   doubleClickEnabled="true" doubleClick="onItemDoubleClick()">
+			<mx:columns>
+				<mx:AdvancedDataGridColumn headerText="用户名" dataField="username" textAlign="left"/>
+				<mx:AdvancedDataGridColumn headerText="Email" dataField="email" textAlign="left"/>
+				<mx:AdvancedDataGridColumn headerText="联系方式" dataField="phone" textAlign="left"/>
+				<mx:AdvancedDataGridColumn headerText="党组织"
+										   labelFunction="{LblFunctionHelper.userAgencyLblFunc}"
+										   itemRenderer="mx.controls.Label" textAlign="left"/>
+				<mx:AdvancedDataGridColumn headerText="状态" dataField="status" 
+										   labelFunction="{LblFunctionHelper.userStatusLblFunc}"/>
+				<!--<mx:AdvancedDataGridColumn headerText="权限"
+										   labelFunction="{LblFunctionHelper.userPrivilegeLblFunc}"/>-->
+				<mx:AdvancedDataGridColumn headerText="最近登录时间" dataField="lastlogintime" itemRenderer="com.partycommittee.renderers.setupDateTimeRenderer" textAlign="left"/>
+			</mx:columns>
+		</mx:AdvancedDataGrid>
+		<pagebar:PageBar id="pageBar" width="100%" page="{page}"/>
+	</mx:VBox>
+	
+</navigation:NavigationView>

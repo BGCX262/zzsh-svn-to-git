@@ -1,0 +1,32 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Application xmlns:fx="http://ns.adobe.com/mxml/2009" 
+			   xmlns:s="library://ns.adobe.com/flex/spark" 
+			   xmlns:mx="library://ns.adobe.com/flex/mx" 
+			   xmlns:views="com.partycommittee.views.*"
+			   layout="absolute"
+			   width="100%" height="100%" 
+			   preinitialize="onCreationCompleted()"
+			   xmlns:service="com.partycommittee.service.*" 
+			   xmlns:controller="com.partycommittee.controller.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.debug.DebugTracer;
+			import com.lnczx.debug.Debugger;
+			private function onCreationCompleted():void {
+//				Debugger.enabled = true;
+//				DebugTracer.initalize();
+				this.service.init();
+			}
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<service:Services id="service"/>
+		<controller:Controller id="controller"/>
+	</fx:Declarations>
+	
+	<fx:Style source="assets/themes/defaults.css"/>
+	
+	<views:MainView width="100%" height="100%"/>
+</mx:Application>

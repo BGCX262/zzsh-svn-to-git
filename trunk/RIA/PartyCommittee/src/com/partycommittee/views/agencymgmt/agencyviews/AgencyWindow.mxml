@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  xmlns:button="com.partycommittee.control.button.*"
+					  horizontalScrollPolicy="off" verticalScrollPolicy="off"
+					  creationComplete="onCreationCompleted()" 
+					  xmlns:component="com.partycommittee.views.agencymgmt.component.*">
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.control.tree.classes.TreeOperationEvent;
+			import com.partycommittee.events.PcAgencyEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.AgencyCodeUtil;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.vo.PcAgencyVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			public var type:String = CRUDEventType.CREATE;
+			
+			[Bindable]
+			private var codeDescription:String;
+			
+			private var _agencyCodeId:Number;
+			[Bindable]
+			public function get agencyCodeId():Number {
+				return this._agencyCodeId;
+			}
+			public function set agencyCodeId(value:Number):void {
+				this._agencyCodeId = value;
+				codeDescription = AgencyCodeUtil.getAgencyCodeDes(this._agencyCodeId);
+			}
+			
+			private var _parentAgency:PcAgencyVo;
+			[Bindable]
+			public function get parentAgency():PcAgencyVo {
+				return this._parentAgency;
+			}
+			public function set parentAgency(value:PcAgencyVo):void {
+				this._parentAgency = value;
+			}
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			private function onCreationCompleted():void {
+				if (this._agency) {
+					updateData();
+				}
+			}
+			
+			private function updateData():void {
+				if (!this._agency) {
+					
+					createDateField.selectedDate = DateUtilExt.now();
+					setupDateField.selectedDate = DateUtilExt.now();
+					return;
+				}
+				
+				codeDescription = AgencyCodeUtil.getAgencyCodeDes(agency.codeId);
+				nameTxt.text = agency.name;
+//				personChooseBox.member = agency.member;
+				telTxt.text = agency.tel;
+				commentTxt.text = agency.comment;
+				createDateField.selectedDate = agency.createDatetime;
+				setupDateField.selectedDate = agency.setupDatetime;
+				
+			}
+			
+			private function save():void {
+				if (type == CRUDEventType.CREATE) {
+					doCreate();
+				} else {
+					doUpdate();
+				}
+			}
+			
+			private function doCreate():void {
+				var evt:PcAgencyEvent = new PcAgencyEvent(CRUDEventType.CREATE, getNewAgency());
+				evt.successCallback = onCallbackSuccessed;
+				evt.failureCallback = onCallbackFailure;
+				evt.dispatch();
+				this.enabled = false;
+			}
+			
+			private function doUpdate():void {
+				var updateAgency:PcAgencyVo = getUpdateAgency();
+				if (updateAgency) {
+					var evt:PcAgencyEvent = new PcAgencyEvent(CRUDEventType.UPDATE, updateAgency);
+					evt.successCallback = onCallbackSuccessed;
+					evt.failureCallback = onCallbackFailure;
+					evt.dispatch();
+				}
+				this.enabled = false;
+			}
+			
+			private function onCallbackSuccessed(data:Object, evt:PcAgencyEvent):void {
+				this.enabled = true;
+				// Dispatch event to update tree.
+				if (type == CRUDEventType.CREATE) {
+					model.tree.dispatchEvent(new TreeOperationEvent(
+						TreeOperationEvent.CHILD_NODE_CHAGNED, model.tree.selectedItem));
+				} else {
+					model.tree.dispatchEvent(new TreeOperationEvent(
+						TreeOperationEvent.NODE_CHANGED, model.tree.selectedItem));
+				}
+				
+				
+//				var agencyEvent:PcAgencyEvent = new PcAgencyEvent(PcAgencyEvent.GET_ROOT_AGENCY_BY_USERID);
+//				agencyEvent.userId = model.loginUser.id;
+//				agencyEvent.dispatch();		
+				close();
+			}
+						
+			private function onCallbackFailure(info:Object, evt:PcAgencyEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			private function getNewAgency():PcAgencyVo {
+				var agencyVo:PcAgencyVo = new PcAgencyVo();
+				agencyVo.parentId = parentAgency.id;
+				agencyVo.codeId = agencyCodeId;
+//				agencyVo.code = agency.code;
+				agencyVo.name = nameTxt.text;
+				agencyVo.tel = telTxt.text;
+				agencyVo.comment = commentTxt.text;
+				
+				agencyVo.createDatetime = createDateField.selectedDate;
+				agencyVo.setupDatetime = setupDateField.selectedDate;				
+				agencyVo.invalidDatetime = 0;
+				return agencyVo;
+			}
+			
+			private function getUpdateAgency():PcAgencyVo {
+				if (!agency) {
+					return null;
+				}
+				var agencyVo:PcAgencyVo = new PcAgencyVo();
+				agencyVo.parentId = agency.parentId;
+				agencyVo.id = agency.id;
+				agencyVo.codeId = agency.codeId;
+				agencyVo.code = agency.code;
+				agencyVo.name = nameTxt.text;
+				agencyVo.createDatetime = createDateField.selectedDate;
+				agencyVo.setupDatetime = setupDateField.selectedDate;
+				agencyVo.invalidDatetime = 0;
+//				if (personChooseBox.member) {
+//					agencyVo.memberId = personChooseBox.member.id;
+//				}
+//				agencyVo.setupDatetime = agency.setupDatetime;
+//				agencyVo.createDatetime = agency.createDatetime;
+				agencyVo.tel = telTxt.text;
+				agencyVo.comment = commentTxt.text;
+				return agencyVo;
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox height="100%" width="100%"
+			 horizontalAlign="center" verticalAlign="middle"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:Form width="450" height="100%"
+				 minWidth="200">
+			<mx:FormItem label="组织性质:" width="100%">
+				<mx:Label width="100%" text="{codeDescription}"/>
+			</mx:FormItem>
+			<mx:FormItem label="组织名称:" required="true" width="100%">
+				<mx:TextInput id="nameTxt" width="100%"/>
+			</mx:FormItem>
+			<!--
+			<mx:FormItem label="组织负责人:" width="100%"
+						 visible="{type == CRUDEventType.UPDATE}"
+						 includeInLayout="{type == CRUDEventType.UPDATE}">
+				<component:PersonChooseBox id="personChooseBox" width="100%"
+										   agency="{agency}"/>
+			</mx:FormItem>
+			-->
+			
+			<mx:FormItem label="成立时间:" width="100%">
+				<mx:DateField id="createDateField"  formatString="YYYY-MM-DD"/>
+			</mx:FormItem>						
+			<mx:FormItem label="改选时间:" width="100%">
+				<mx:DateField id="setupDateField" formatString="YYYY-MM-DD"/>
+			</mx:FormItem>			
+			
+			<mx:FormItem label="电话号码:" width="100%">
+				<mx:TextInput id="telTxt" width="150" restrict="0-9\-"/>
+			</mx:FormItem>
+			<mx:FormItem label="描述:" width="100%">
+				<mx:TextArea id="commentTxt" width="100%" height="80"/>
+			</mx:FormItem>
+		</mx:Form>
+		<mx:ControlBar width="100%" horizontalAlign="center">
+			<button:PcButton label="保存" click="save()"/>
+			<button:PcButton label="取消" click="close()"/>
+		</mx:ControlBar>
+	</mx:VBox>
+</control:EscapeWindow>

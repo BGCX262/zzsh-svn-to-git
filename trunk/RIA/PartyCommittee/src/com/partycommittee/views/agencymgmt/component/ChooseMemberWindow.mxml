@@ -1,0 +1,130 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  height="650" width="500"
+					  title="选择组织负责人"
+					  creationComplete="onCreationCompleted()"
+					  xmlns:button="com.partycommittee.control.button.*"
+					  horizontalScrollPolicy="off" verticalScrollPolicy="off" 
+					  xmlns:pagebar="com.partycommittee.control.pagebar.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcMemberEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.LblFunctionHelper;
+			import com.partycommittee.views.partymember.PartyMemberWindow;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcMemberVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			import com.partycommittee.vo.page.PageResultVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			private var dp:ArrayCollection;
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			private var _page:PageHelperVo;
+			[Bindable]
+			public function get page():PageHelperVo {
+				if (!this._page) {
+					this._page = new PageHelperVo();
+				}
+				return this._page;
+			}
+			public function set page(value:PageHelperVo):void {
+				this._page = value;
+			}
+			
+			private var _selectedMember:PcMemberVo;
+			public function get selectedMember():PcMemberVo {
+				return this._selectedMember;
+			}
+			
+			private function onCreationCompleted():void {
+				updateData();
+			}
+			
+			public function updateData():void {
+				if (!agency || (agency.codeId == PCConst.AGENCY_CODE_BOARDCOMMITTEES)) {
+					return;
+				}
+				var evt:PcMemberEvent = new PcMemberEvent(PcMemberEvent.GET_MEMBERS_BY_AGENCYID, null, agency.id);
+				evt.page = page;
+				evt.successCallback = onLoadMembers;
+				evt.dispatch();
+			}
+			
+			private function onLoadMembers(data:Object, evt:PcMemberEvent):void {
+				dp = data as ArrayCollection;
+//				var pageResult:PageResultVo = data as PageResultVo;
+//				if (!pageResult) {
+//					return;
+//				}
+//				page = pageResult.pageHelper;
+//				dp = pageResult.list;
+			}
+			
+			private function onOkBtnClick():void {
+				this._selectedMember = datagrid.selectedItem as PcMemberVo;
+				this.close();
+			}
+			
+			private function onCreateMember():void {
+				if (!agency) {
+					return;
+				}
+				var window:PartyMemberWindow = new PartyMemberWindow();
+				window.parentView = this;
+				PopupMgr.instance.popupWindow(window);
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox height="100%" width="100%"
+			 horizontalAlign="center" verticalAlign="middle"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:AdvancedDataGrid id="datagrid" width="100%" height="100%"
+							 headerStyleName="dataGridHeader"
+							 dataProvider="{dp}">
+			<mx:columns>
+				<mx:AdvancedDataGridColumn headerText="姓名" dataField="name"/>
+				<mx:AdvancedDataGridColumn headerText="性别" dataField="sexId" 
+										   labelFunction="{LblFunctionHelper.memberSexLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="出生年月" dataField="birthday"
+										   labelFunction="{LblFunctionHelper.dateLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="职务" dataField="dutyId"
+										   labelFunction="{LblFunctionHelper.memberDutyLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="何时入党" dataField="joinday"
+										   labelFunction="{LblFunctionHelper.dateLblFunc}"/>
+			</mx:columns>
+		</mx:AdvancedDataGrid>
+		<pagebar:PageBar page="{page}" width="100%"
+						 enabled="false"/>
+		<mx:ControlBar width="100%" horizontalAlign="center">
+			<button:PcButton label="新建党员" click="onCreateMember()"/>
+			<s:Spacer width="100%"/>
+			<button:PcButton label="确定" click="onOkBtnClick()"
+							 enabled="{datagrid.selectedItem}"/>
+			<button:PcButton label="关闭" click="close()"/>
+		</mx:ControlBar>
+	</mx:VBox>
+</control:EscapeWindow>

@@ -1,0 +1,471 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  height="650" width="900"
+					  title="{workPlanTitle}"
+					  creationComplete="onCreationCompleted()"
+					  xmlns:button="com.partycommittee.control.button.*" 
+					  xmlns:richtexttoolbar="com.partycommittee.control.richtexttoolbar.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcWorkPlanEvent;
+			import com.partycommittee.manager.navigation.NavigationView;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.DateUtil;
+			import com.partycommittee.util.UserUtil;
+			import com.partycommittee.util.WorkPlanCodeUtil;
+			import com.partycommittee.views.agencymgmt.agencyactivity.BrowseWorkplanView;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.component.ReturnFormWindow;
+			import com.partycommittee.views.mainview.MainView;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcWorkPlanContentVo;
+			import com.partycommittee.vo.PcWorkPlanVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+
+			[Bindable]
+			private var workPlanTitle:String;
+			
+			[Bindable]
+			private var year:Number;
+			[Bindable]
+			private var quarter:Number = 1;
+			
+			private var _workPlan:PcWorkPlanVo;
+			[Bindable]
+			public function get workPlan():PcWorkPlanVo {
+				return this._workPlan;
+			}
+			public function set workPlan(value:PcWorkPlanVo):void {
+				this._workPlan = value;
+			}
+			
+			private var _type:Number;
+			[Bindable]
+			public function get type():Number {
+				return this._type;
+			}
+			public function set type(value:Number):void {
+				this._type = value;
+			}
+			
+			[Bindable]
+			private var yearDp:ArrayCollection;
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			private var _parentView:NavigationView;
+			[Bindable]
+			public function get parentView():NavigationView {
+				return this._parentView;
+			}
+			public function set parentView(value:NavigationView):void {
+				this._parentView = value;
+			}
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			private function onCreationCompleted():void {
+//				t.mx_internal::getTextField().wordWrap = true;
+				updateData();
+			}
+			
+			private function updateData():void {
+				if (!agency || !workPlan) {
+					return;
+				}
+				
+				year = workPlan.year;
+				quarter = workPlan.quarter;
+				
+				switch (workPlan.typeId) {
+					case PCConst.WORKPLAN_TYPE_YEARLY:
+						workPlanTitle = year + "年度工作计划";
+//						quarterBox.visible = quarterBox.includeInLayout = false;
+						break;
+					case PCConst.WORKPLAN_TYPE_YEARLY_SUMMARY:
+						workPlanTitle = year + "年终工作总结";
+//						quarterBox.visible = quarterBox.includeInLayout = false;
+						break;
+					case PCConst.WORKPLAN_TYPE_QUARTER:
+						workPlanTitle = year + "年第" + quarter + "季度工作计划";
+						break;
+					case PCConst.WORKPLAN_TYPE_QUARTER_SUMMARY:
+						workPlanTitle = year + "年第" + quarter + "季度执行情况计划";
+						break;
+				}
+				
+				if (workPlan.id) {
+					if (workPlan.workPlanContent) {
+						personTxt.text = workPlan.workPlanContent.memberName;
+						textArea.htmlText = workPlan.workPlanContent.content;
+					} else {
+						loadWorkPlanContent();
+					}
+					
+					
+					// 处理存在即有评价又有评语权限的情况
+					if (workPlan.statusId == 3) {
+						if (UserUtil.checkRole(4, model.loginUser.roles) == false) {
+							rate_box.visible = false;
+						}
+					}
+					
+					if (workPlan.statusId == 4) {
+						if (UserUtil.checkRole(4, model.loginUser.roles) == false) {
+							handleBtn.visible = false;		
+							rate_box.visible = false;
+						}
+					}
+					
+
+				}
+			}
+			
+			private function loadWorkPlanContent():void {
+				var evt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_CONTENT_INFO);
+				evt.workPlan = workPlan;
+				evt.contentType = 1;
+				evt.successCallback = onLoadContentSuccess;
+				evt.failureCallback = onLoadContentFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function onLoadContentFailure(info:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show("读取工作计划内容失败！");
+			}
+			
+			private function onLoadContentSuccess(data:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				var workPlanContent:PcWorkPlanContentVo = data as PcWorkPlanContentVo;
+				personTxt.text = workPlanContent.memberName;
+				textArea.htmlText = workPlanContent.content;
+				dateTxt.text = "日期：" + DateUtil.toISOString(workPlanContent.updatetime);
+
+				
+//				if (workPlan.statusId >=4) {
+					getEvaluateInfo();
+//				}
+			}
+			
+			private function getEvaluateInfo():void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_CONTENT_INFO);
+				workPlanEvt.workPlan = workPlan;
+				workPlanEvt.contentType = 3;
+				workPlanEvt.successCallback = onGetEvaluateInfoSuccess;
+				workPlanEvt.failureCallback = onGetEvaluateInfoFailure;
+				this.enabled = false;
+				workPlanEvt.dispatch();
+			}
+			
+			private function onGetEvaluateInfoSuccess(data:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				if (data as PcWorkPlanContentVo) {
+					var contentVo:PcWorkPlanContentVo = data as PcWorkPlanContentVo;
+					this.handlePersonTxt.text = contentVo.memberName;
+					this.handleTextArea.htmlText = contentVo.content;
+					if (workPlan.statusId >=4) {
+						dateTxt_eva.text = "日期：" + DateUtil.toISOString(contentVo.updatetime);
+						dateTxt_eva.visible = true;
+					}					
+//					if (workPlan.statusId == 5) {
+						getRateInfo();
+//					}
+				}
+			}
+			
+			private function onGetEvaluateInfoFailure(info:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			private function getRateInfo():void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_CONTENT_INFO);
+				workPlanEvt.workPlan = workPlan;
+				workPlanEvt.contentType = 4;
+				workPlanEvt.successCallback = onGetRateInfoSuccess;
+				workPlanEvt.failureCallback = onGetRateInfoFailure;
+				this.enabled = false;
+				workPlanEvt.dispatch();
+			}
+			
+			private function onGetRateInfoSuccess(data:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				if (data as PcWorkPlanContentVo) {
+					var contentVo:PcWorkPlanContentVo = data as PcWorkPlanContentVo;
+					this.ratePersonTxt.text = contentVo.memberName;
+					//this.rateTextArea.htmlText = contentVo.content;
+					rateGroup.selectedValue = contentVo.content;
+					
+					if (workPlan.statusId == 5) {
+						dateTxt_rate.text = "日期：" + DateUtil.toISOString(contentVo.updatetime);
+						dateTxt_rate.visible = true;
+					}					
+				}
+			}
+			
+			private function onGetRateInfoFailure(info:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}			
+			
+			private function doReturn():void {
+				var title:String = '驳回原因';
+				var win:ReturnFormWindow = new ReturnFormWindow();
+				win.title = title;
+				win.callbackFunction = this.onReturn;
+				win.modelType = 'report';
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+			private function onReturn(returnTxt:String, returnPerson:String):void {
+				workPlan.statusId = 2;
+				var evt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.SAVE_CONTENT_WORKPLAN, agency);
+				evt.workPlan = workPlan;
+				evt.workPlanContent = getReturnContent(returnTxt, returnPerson);
+				evt.successCallback = onReturnSuccess;
+				evt.failureCallback = onReturnFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function onReturnSuccess(data:Object, evt:PcWorkPlanEvent):void {
+				Alert.show("驳回成功！");
+				this.enabled = true;
+				if (parentView is BrowseWorkplanView) {
+					(parentView as BrowseWorkplanView).refreshData();
+				} else if (parentView is MainView) {
+					(parentView as MainView).refreshData();
+				}
+				this.close();
+			}
+			
+			private function onReturnFailure(data:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show("驳回失败！");
+			}			
+			
+			
+			private function formValidate():Boolean {
+				if (workPlan.statusId == 3) {
+					if (handlePersonTxt.text.length == 0) {
+						Alert.show("评语主体不能为空!");
+						return false;
+					}
+					
+					if (handleTextArea.htmlText.length == 0) {
+						Alert.show("评语不能为空!");
+						return false;
+					}
+				}
+				
+				if (UserUtil.checkRole(4, model.loginUser.roles) == true) {
+					
+					if (!rateGroup.selectedValue) {
+						Alert.show("请选择评价!");
+						return false;						
+					}
+										
+					
+					if (ratePersonTxt.text.length == 0) {
+						Alert.show("评价主体不能为空!");
+						return false;
+					}
+				}
+				
+				return true;
+			}			
+			
+			private function onHandle(statusId:Number):void {
+				if (formValidate() == true) {	
+					workPlan.statusId = statusId;
+					if (statusId == 5) {
+						doRate();
+					} else {
+						doEvaluate();
+					}
+				}
+			}
+
+			private function doEvaluate():void {
+				var evaluateEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.SAVE_CONTENT_WORKPLAN, agency);
+				evaluateEvt.workPlan = workPlan;
+				evaluateEvt.workPlanContent = getHandleContent();
+				evaluateEvt.successCallback = onEvaluateSuccess;
+				evaluateEvt.failureCallback = onEvaluateFailure;
+				this.enabled = false;
+				evaluateEvt.dispatch();
+			}
+			
+			private function onEvaluateSuccess(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				
+				if (UserUtil.checkRole(4, model.loginUser.roles) == false) {
+					if (parentView is BrowseWorkplanView) {
+						(parentView as BrowseWorkplanView).refreshData();
+					} else if (parentView is MainView) {
+						(parentView as MainView).refreshData();
+					}
+					
+					this.close();
+				} else {
+					doRate();
+				}
+				
+			}
+			
+			private function onEvaluateFailure(info:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show("评语失败！");
+			}
+			
+			private function doRate():void {
+				var rateEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.SAVE_CONTENT_WORKPLAN, agency);
+				if (workPlan.statusId > 3) {
+					workPlan.statusId = 5;
+				}
+				rateEvt.workPlan = workPlan;
+				rateEvt.workPlanContent = getRateContent();
+				rateEvt.successCallback = onRateSuccess;
+				rateEvt.failureCallback = onRateFailure;
+				this.enabled = false;	
+				rateEvt.dispatch();
+			}
+			
+			private function onRateSuccess(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				if (parentView is BrowseWorkplanView) {
+					(parentView as BrowseWorkplanView).refreshData();
+				} else if (parentView is MainView) {
+					(parentView as MainView).refreshData();
+				}
+				this.close();
+			}	
+			
+			private function onRateFailure(info:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+			}			
+			
+			private function getHandleContent():PcWorkPlanContentVo {
+				var contentVo:PcWorkPlanContentVo = new PcWorkPlanContentVo();
+				contentVo.memberName = handlePersonTxt.text;
+				contentVo.content = handleTextArea.htmlText;
+				contentVo.type = 3;
+				return contentVo;
+			}
+			
+			private function getRateContent():PcWorkPlanContentVo {
+				var contentVo:PcWorkPlanContentVo = new PcWorkPlanContentVo();
+				contentVo.memberName = ratePersonTxt.text;
+				contentVo.content = rateGroup.selectedValue.toString();
+				contentVo.type = 4;
+				return contentVo;
+			}		
+			
+			private function getReturnContent(returnTxt:String, returnPerson:String):PcWorkPlanContentVo {
+				var contentVo:PcWorkPlanContentVo = new PcWorkPlanContentVo();
+				contentVo.memberName = returnPerson;
+				contentVo.content = returnTxt;
+				contentVo.type = 2;
+				return contentVo;
+			}					
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<s:RadioButtonGroup id="rateGroup" />  
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 left="6" right="6" top="6" bottom="6"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:HBox width="100%" horizontalAlign="center"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label fontSize="20" fontWeight="bold" text="{workPlanTitle}"/>
+		</mx:HBox>
+		<mx:HBox width="100%" height="100%"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:VBox width="50%" height="100%"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+					<mx:Label text="年    份："/>
+					<mx:Label text="{year}"/>
+				</mx:HBox>
+				<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+					<mx:Label text="填写人："/>
+					<mx:TextInput id="personTxt" width="200"
+								  editable="false"/>
+					<mx:Spacer width="100%"/>
+					<mx:Label left="0"   id="dateTxt" visible="true"/>
+				</mx:HBox>
+				<mx:TextArea id="textArea" width="100%" height="100%"
+							 editable="false"/>
+			</mx:VBox>
+			<mx:VRule height="100%"/>
+			<mx:VBox width="50%" height="100%"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+
+				<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+					<mx:Label id="handlePersonLbl" text="评语主体："/>
+					<mx:TextInput id="handlePersonTxt" width="200"
+								  editable="{workPlan.statusId == 3}"/>
+					<mx:Spacer width="100%"/>
+					<mx:Label left="0"   id="dateTxt_eva" visible="false"/>
+				</mx:HBox>
+				
+				<richtexttoolbar:PopupRichTextToolBar width="100%" height="22" target="{handleTextArea}" visible="{!workPlan || workPlan.statusId == 3 }"/>
+				<mx:TextArea id="handleTextArea" width="100%" height="100%"
+							 editable="{workPlan.statusId == 3}"/>
+
+				
+				<mx:VBox id="rate_box" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+					<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+						<mx:Label text="评价:      "/>
+						<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate1" label="好" value="1" /> 
+						<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate2" label="较好" value="2"/>
+						<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate3" label="一般" value="3"/>
+						<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate4" label="差" value="4"/>
+					</mx:HBox>
+					<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+						<mx:Label text="评价主体:"/>
+						<mx:TextInput id="ratePersonTxt" width="200"
+									  editable="true"/>
+						<mx:Spacer width="100%"/>
+						<mx:Label left="0"   id="dateTxt_rate" visible="false"/>
+					</mx:HBox>
+				</mx:VBox>				
+				
+			</mx:VBox>
+		</mx:HBox>
+		
+		<mx:ControlBar width="100%" horizontalAlign="center" verticalAlign="middle">
+			<button:PcButton label="暂存" click="onHandle(3)"
+							 visible="{workPlan.statusId == 3}"/>
+			<button:PcButton id="handleBtn" label="保存" click="onHandle(workPlan.statusId == 4 ? 5 : 4)" visible="{workPlan.statusId &lt; 5}" />
+			
+			<button:PcButton label="关闭" click="close()"/>
+			<button:PcButton id="returnBtn" label="驳回" click="doReturn()" visible="{UserUtil.checkRole(5, model.loginUser.roles) ? ( (workPlan.statusId &lt; 5) ? true : false ) : false}"/>
+		</mx:ControlBar>
+	</mx:VBox>
+	
+</control:EscapeWindow>

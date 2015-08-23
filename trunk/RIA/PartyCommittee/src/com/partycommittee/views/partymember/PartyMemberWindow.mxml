@@ -1,0 +1,303 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" 
+					  title="建立支委委员" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  xmlns:button="com.partycommittee.control.button.*"
+					  horizontalScrollPolicy="off" verticalScrollPolicy="off" 
+					  xmlns:component="com.partycommittee.views.partymember.component.*"
+					  creationComplete="onCreationCompleted()" xmlns:dateselect="com.partycommittee.control.dateselect.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcMemberEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DutyCodeUtil;
+			import com.partycommittee.util.EduCodeUtil;
+			import com.partycommittee.util.NationCodeUtil;
+			import com.partycommittee.util.SexCodeUtil;
+			import com.partycommittee.vo.PcDutyCodeVo;
+			import com.partycommittee.vo.PcMemberVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			public var type:String = CRUDEventType.CREATE;
+			
+			public var parentView:Object;
+			
+			private var _editEnable:Boolean = true;
+			[Bindable]
+			public function get editEnable():Boolean {
+				return this._editEnable;
+			}
+			public function set editEnable(value:Boolean):void {
+				this._editEnable = value;
+			}
+			
+			private var _memberVo:PcMemberVo;
+
+			[Bindable]
+			public function get memberVo():PcMemberVo {
+				return this._memberVo;
+			}
+			public function set memberVo(value:PcMemberVo):void {
+				this._memberVo = value;
+			}
+			
+			private var dutyList:ArrayCollection = new ArrayCollection();
+			
+			private function onCreationCompleted():void {
+				
+				var data:ArrayCollection = ModelLocator.getInstance().dutyCodeCollection;
+				for (var i=0; i< data.length; i++) {
+					var vo:PcDutyCodeVo = data.getItemAt(i) as PcDutyCodeVo;
+					dutyList.addItem(vo.id);
+				}
+				updateData();
+			}
+			
+			private function updateData():void {
+				this.agencyNameTxt.text = this.parentView.agency.name;
+				
+				if (!this._memberVo) {
+					return;
+				}
+				addressTxt.text = this._memberVo.address;
+				birthdayDateField.date = this._memberVo.birthday;
+				birthplaceTxt.text = this._memberVo.birthPlace;
+				if (this._memberVo.dutyId == 0) {
+					dutyCk.selected = true;
+				} else {
+					dutyCmb.selectedItem = this._memberVo.dutyId;
+				}
+				adminDutyTxt.text = this._memberVo.adminDuty;
+				postdayDateField.date = this._memberVo.postday;
+				if (this._memberVo.eduId == 0) {
+					eduCk.selected = true;
+				} else {
+					eduCmb.selectedItem = this._memberVo.eduId;
+				}
+				joinDateField.date = this._memberVo.joinday;
+				nameTxt.text = this._memberVo.name;
+				if (this._memberVo.nationId == 0) {
+					nationCk.selected = true;
+				} else {
+					nationCmb.selectedItem = this._memberVo.nationId;
+				}
+				if (this._memberVo.sexId == 0) {
+					sexCk.selected = true;
+				} else {
+					sexCmb.selectedItem = this._memberVo.sexId;
+				}
+				//commentTxt.text = this._memberVo.comment;
+				sortTxt.text = this._memberVo.sort + '';
+				workDateField.date = this._memberVo.workday;
+			}
+			
+			private function save():void {
+				if (type == CRUDEventType.CREATE) {
+					doCreate();
+				} else {
+					doUpdate();
+				}
+			}
+			
+			private function doCreate():void {
+				var newMember:PcMemberVo = getNewMember();
+				var memberEvt:PcMemberEvent = new PcMemberEvent(CRUDEventType.CREATE, newMember);
+				memberEvt.successCallback = onSuccessCallback;
+				memberEvt.failureCallback = onFailureCallback;
+				this.enabled = false;
+				memberEvt.dispatch();
+			}
+			
+			private function doUpdate():void {
+				var updateMember:PcMemberVo = getUpdateMember();
+				var memberEvt:PcMemberEvent = new PcMemberEvent(CRUDEventType.UPDATE, updateMember);
+				memberEvt.successCallback = onSuccessCallback;
+				memberEvt.failureCallback = onFailureCallback;
+				this.enabled = false;
+				memberEvt.dispatch();
+			}
+			
+			private function onSuccessCallback(data:Object, evt:PcMemberEvent):void {
+				this.enabled = true;
+				parentView.updateData();
+				this.close();
+			}
+			
+			private function onFailureCallback(info:Object, evt:PcMemberEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			private function getNewMember():PcMemberVo {
+				var newMember:PcMemberVo = new PcMemberVo();
+				newMember.active = 1;
+				newMember.address = addressTxt.text;
+				newMember.agencyId = parentView.agency.id;
+				newMember.birthday = birthdayDateField.date;
+				newMember.birthPlace = birthplaceTxt.text;
+				if (dutyCk.selected) {
+					newMember.dutyId = 0;
+				} else {
+					newMember.dutyId = dutyCmb.selectedItem as Number;
+				}
+				if (eduCk.selected) {
+					newMember.eduId = 0;
+				} else {
+					newMember.eduId = eduCmb.selectedItem as Number;
+				}
+				newMember.joinday = joinDateField.date;
+				newMember.name = nameTxt.text;
+				if (nationCk.selected) {
+					newMember.nationId = 0;
+				} else {
+					newMember.nationId = nationCmb.selectedItem as Number;
+				}
+				if (sexCk.selected) {
+					newMember.sexId = 0;
+				} else {
+					newMember.sexId = sexCmb.selectedItem as Number;
+				}
+				newMember.workday = workDateField.date;
+				//newMember.comment = commentTxt.text;
+				newMember.adminDuty = adminDutyTxt.text;
+				newMember.postday = postdayDateField.date;
+				newMember.sort = Number(sortTxt.text);
+				return newMember;
+			}
+			
+			private function getUpdateMember():PcMemberVo {
+				var updateMember:PcMemberVo = getNewMember();
+				updateMember.id = memberVo.id;
+				return updateMember;
+			}
+			
+			private function sexLblFunc(item:Object):String {
+				return SexCodeUtil.getSexCodeDes(item as Number);
+			}
+			
+			private function dutyLblFunc(item:Object):String {
+				return DutyCodeUtil.getDutyCodeDes(item as Number, ModelLocator.getInstance().dutyCodeCollection);
+			}
+			
+			private function nationLblFunc(item:Object):String {
+				return NationCodeUtil.getNationDesById(item as Number);
+			}
+			
+			private function eduLblFunc(item:Object):String {
+				return EduCodeUtil.getEduCodeDes(item as Number);
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox height="100%" width="100%"
+			 horizontalAlign="center" verticalAlign="middle"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:Form width="600" height="100%"
+				 minWidth="200"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:FormItem label="党组织名称:" width="100%">
+				<mx:TextInput id="agencyNameTxt" editable="false" maxChars="50"/>
+			</mx:FormItem>
+			<mx:FormItem label="党内职务:" width="100%">
+				<mx:HBox width="100%">
+					<mx:ComboBox id="dutyCmb" width="100%" maxWidth="100"
+								 labelFunction="dutyLblFunc"
+								 dataProvider="{dutyList}"
+								 enabled="{!dutyCk.selected}"/>
+					<mx:CheckBox id="dutyCk" label="清空"/>
+				</mx:HBox>
+			</mx:FormItem>
+			<mx:FormItem label="姓名:" required="true" width="100%">
+				<mx:TextInput id="nameTxt" width="100%" maxChars="60"/>
+			</mx:FormItem>
+			<mx:FormItem label="性别:" width="100%">
+				<mx:HBox width="100%">
+					<mx:ComboBox id="sexCmb" width="100%" maxWidth="100"
+								 labelFunction="sexLblFunc"
+								 dataProvider="{PCConst.SexList}"
+								 enabled="{!sexCk.selected}"/>
+					<mx:CheckBox id="sexCk" label="清空"/>
+				</mx:HBox>
+			</mx:FormItem>
+			<mx:FormItem label="民族:" required="true" width="100%">
+				<mx:HBox width="100%">
+					<mx:ComboBox id="nationCmb" 
+								 dataProvider="{PCConst.nationList}"
+								 labelFunction="nationLblFunc"
+								 enabled="{!nationCk.selected}"/>
+					<mx:CheckBox id="nationCk" label="清空"/>
+				</mx:HBox>
+			</mx:FormItem>
+			<mx:FormItem label="出生年月:" required="true" width="100%">
+				<!--
+				<mx:DateField id="birthdayDateField" width="150"
+							  formatString="YYYY-MM-DD"/>
+				-->
+				<dateselect:DateSelectBox id="birthdayDateField"/>
+			</mx:FormItem>
+			<mx:FormItem label="籍贯:" width="100%">
+				<mx:TextInput id="birthplaceTxt" width="100%" maxChars="50"/>
+			</mx:FormItem>
+			<mx:FormItem label="文化程度:" width="100%">
+				<!--
+				<component:ChooseEduBox id="eduBox" width="100%"/>
+				-->
+				<mx:HBox width="100%">
+					<mx:ComboBox id="eduCmb" dataProvider="{PCConst.EduList}"
+								 labelFunction="eduLblFunc"
+								 enabled="{!eduCk.selected}"/>
+					<mx:CheckBox id="eduCk" label="清空"/>
+				</mx:HBox>
+			</mx:FormItem>
+			<mx:FormItem label="行政职务:" width="100%">
+				<mx:TextInput id="adminDutyTxt" width="100%" maxChars="50"/>
+			</mx:FormItem>
+			<mx:FormItem label="何时入党:" required="true" width="100%">
+				<!--
+				<mx:DateField id="joinDateField" width="150"
+							  formatString="YYYY-MM-DD"/>
+				-->
+				<dateselect:DateSelectBox id="joinDateField"/>
+			</mx:FormItem>
+			<mx:FormItem label="参加工作时间:" required="true" width="100%">
+				<!--
+				<mx:DateField id="workDateField" width="150"
+							  formatString="YYYY-MM-DD"/>
+				-->
+				<dateselect:DateSelectBox id="workDateField"/>
+			</mx:FormItem>
+			<mx:FormItem label="任党内职务时间:" width="100%">
+				<dateselect:DateSelectBox id="postdayDateField"/>
+			</mx:FormItem>
+			<mx:FormItem label="现在家庭住址:" width="100%">
+				<mx:TextArea id="addressTxt" width="100%" height="60" maxChars="200"/>
+			</mx:FormItem>
+			<mx:FormItem label="排序:" width="100%">
+				<mx:TextInput id="sortTxt" width="100%" restrict="0-9" maxChars="5"/>
+			</mx:FormItem>
+			<!--
+			<mx:FormItem label="备注:" width="100%">
+				<mx:TextArea id="commentTxt" width="100%" height="60"/>
+			</mx:FormItem>
+			-->
+		</mx:Form>
+		<mx:ControlBar width="100%" horizontalAlign="center">
+			<button:PcButton label="保存" click="save()" visible="{editEnable}"/>
+			<button:PcButton label="取消" click="close()"/>
+		</mx:ControlBar>
+	</mx:VBox>
+</control:EscapeWindow>

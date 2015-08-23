@@ -1,0 +1,87 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 horizontalAlign="left" verticalAlign="middle" 
+		 width="100%"
+		 xmlns:button="com.partycommittee.control.button.*"
+		 creationComplete="onCreationCompleted()">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.util.EduCodeUtil;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcMemberVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.events.CloseEvent;
+			
+			[Bindable]
+			public var isEduCmbVisible:Boolean = false;
+			
+			[Bindable]
+			private var eduDp:ArrayCollection;
+			
+			private var _eduId:Number;
+			[Bindable]
+			public function get eduId():Number {
+				if (isEduCmbVisible) {
+					return eduCmb.selectedItem as Number;
+				}
+				return this.catalogCmb.selectedItem as Number;
+			}
+			public function set eduId(value:Number):void {
+				this._eduId = value;
+				updateData();
+			}
+			
+			private function onCreationCompleted():void {
+				catalogCmb.selectedIndex = PCConst.EduCatalogList.length - 1;
+				isEduCmbVisible = false;
+			}
+			
+			private function updateData():void {
+				if (!this._eduId || this._eduId == 26) {
+					catalogCmb.selectedIndex = PCConst.EduCatalogList.length - 1;
+					isEduCmbVisible = false;
+					return;
+				}
+				updateEduCmbSelection();
+			}
+			
+			private function updateEduCmbSelection():void {
+				if (!this._eduId) {
+					return;
+				}
+				catalogCmb.selectedItem = EduCodeUtil.getCatalogItem(this._eduId);
+				eduDp = EduCodeUtil.getEduDp(catalogCmb.selectedItem as Number);
+				eduCmb.selectedItem = this._eduId;
+				isEduCmbVisible = true;
+			}
+			
+			private function onCatalogCmbChanged():void {
+				eduDp = EduCodeUtil.getEduDp(catalogCmb.selectedItem as Number);
+				if (eduDp && eduDp.length > 0) {
+					eduCmb.selectedIndex = 0;
+					isEduCmbVisible = true;
+				} else {
+					isEduCmbVisible = false;
+				}
+			}
+			
+			private function lblFunc(item:Object):String {
+				return EduCodeUtil.getEduCodeDes(item as Number);
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:ComboBox id="catalogCmb" width="50%" dataProvider="{PCConst.EduCatalogList}"
+				 labelFunction="lblFunc"
+				 change="onCatalogCmbChanged()"/>
+	<mx:ComboBox id="eduCmb" width="50%" dataProvider="{eduDp}" 
+				 labelFunction="lblFunc" itemRenderer="mx.controls.Label"
+				 visible="{isEduCmbVisible}" includeInLayout="{isEduCmbVisible}"/>
+</mx:HBox>

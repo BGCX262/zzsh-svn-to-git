@@ -1,0 +1,352 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						   xmlns:s="library://ns.adobe.com/flex/spark" 
+						   xmlns:mx="library://ns.adobe.com/flex/mx"
+						   styleName="mainCanvas"
+						   width="100%" height="100%" 
+						   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+						   xmlns:component="com.partycommittee.views.agencymgmt.component.*" 
+						   xmlns:button="com.partycommittee.control.button.*"
+						   creationComplete="onCreationCompleted()">
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.events.PcAgencyEvent;
+			import com.partycommittee.events.PcMeetingEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.UserUtil;
+			import com.partycommittee.util.WorkPlanCodeUtil;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.MeetingHandlerView;
+			import com.partycommittee.vo.FilterVo;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcMeetingVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.CloseEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.utils.ObjectUtil;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+
+			private var year:Number;
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			[Bindable]
+			private var dp:ArrayCollection = new ArrayCollection();
+			
+			private function onCreationCompleted():void {
+				this.year = model.reportYear;
+				
+				if (quarterCmb) {
+					var q:ArrayCollection =  DataproviderFactory.createQuarterDp();
+					q.addItemAt("全部", 0);
+					quarterCmb.dataProvider = q; 
+					quarterCmb.selectedIndex = 0;
+				}				
+				
+				if (typeCmb) {
+					var tq:Array = DataproviderFactory.createMeetingTypeDp();
+					tq.unshift("全部");
+					typeCmb.dataProvider = tq;
+					
+					typeCmb.selectedIndex = 0;
+				}
+				
+				if (statusCmb) {
+					var tq:Array = new Array({statusId:3, label:'未评'},
+						{statusId:5, label:'已评'});
+					tq.unshift("全部");
+					statusCmb.dataProvider = tq;
+					statusCmb.selectedIndex = 1;
+				}				
+				
+				onNavigateIn();
+//				refreshData();
+			}
+			
+			override protected function onNavigateIn():void {
+				if (agency != model.focusAgencyVo) {
+					agency = model.focusAgencyVo;
+				}
+				refreshData();
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+			}
+			
+			override protected function onNavigateOut():void {
+				model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+			}
+			
+			private function onModelChanged(event:PropertyChangeEvent):void {
+				if (event.property == "focusAgencyVo" || event.property == 'reportYear') {
+					agency = model.focusAgencyVo;
+					this.year = model.reportYear;
+					refreshData();
+				}
+			}
+			
+			public function refreshData():void {
+				//if (agency.children && agency.children.length) {
+				if (agency.codeId != 10) {
+					getCommitMeeting();
+					return;
+				}
+				//}
+//				var pcAgencyEvt:PcAgencyEvent = new PcAgencyEvent(PcAgencyEvent.GET_CHILDREN, agency);
+//				pcAgencyEvt.successCallback = onGetChildrenSuccess;
+//				pcAgencyEvt.failureCallback = onGetChildrenFailure;
+//				pcAgencyEvt.dispatch();
+			}
+			
+			private function onGetChildrenSuccess(data:Object, evt:PcAgencyEvent):void {
+				agency.children = data as ArrayCollection;
+				getCommitMeeting();
+			}
+			
+			private function onGetChildrenFailure(data:Object, evt:PcAgencyEvent):void {
+				Alert.show(data.toString());
+			}
+			
+			private function getCommitMeeting():void {
+				if (agency.id == 1) return;
+				var pcMeetingEvent:PcMeetingEvent = new PcMeetingEvent(PcMeetingEvent.GET_COMMIT_CHILDREN_MEETING);
+				pcMeetingEvent.agency = agency;
+				if (this.year == 0) this.year = DateUtilExt.now().getFullYear();
+				pcMeetingEvent.year = this.year;
+				
+				
+				var filters:Array = new Array();
+				
+				// 类型:
+				if (typeCmb.selectedIndex > 0) {				
+					var t_vo:FilterVo = new FilterVo();
+					t_vo.id = 'typeId';
+					t_vo.data = (typeCmb.selectedItem as Object).typeId;
+					filters.push(t_vo);
+				}
+				
+				if (quarterCmb.selectedIndex > 0) {
+					var vo:FilterVo = new FilterVo();
+					vo.id = "quarter";
+					vo.data  = ObjectUtil.toString(quarterCmb.selectedItem);
+					filters.push(vo);
+				}
+				
+				if (statusCmb.selectedIndex > 0) {
+					var vo:FilterVo = new FilterVo();
+					vo.id = "statusId";
+					vo.data  = (statusCmb.selectedItem as Object).statusId;
+					filters.push(vo);
+				}				
+				pcMeetingEvent.filters = filters;				
+				
+				pcMeetingEvent.failureCallback = getMeetingFailure;
+				pcMeetingEvent.successCallback = getMeetingSuccess;
+				pcMeetingEvent.dispatch();
+				this.enabled = false;
+			}
+			
+			private function getMeetingSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				dp = data as ArrayCollection;
+			}
+			
+			private function getMeetingFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			private function typeLblFunc(item:Object, col:*):String {
+				return WorkPlanCodeUtil.getWorkPlanTypeDes((item as PcMeetingVo).typeId);
+			}
+			
+			private function agencyLblFunc(item:Object, col:*):String {
+				var agencyId:Number = (item as PcMeetingVo).agencyId;
+				for each (var child:PcAgencyVo in agency.children) {
+					if (child.id == agencyId) {
+						return child.name;
+					}
+				}
+				return "";
+			}
+			
+			private function quarterLblFunc(item:Object, col:*):String {
+				switch ((item as PcMeetingVo).quarter) {
+					case 1:
+						return "第一季度";
+					case 2:
+						return "第二季度";
+					case 3:
+						return "第三季度";
+					case 4:
+						return "第四季度";
+				}
+				return "";
+			}
+			
+			private function monthLblFunc(item:Object, col:*):String {
+				
+				
+				if (item is PcMeetingVo) {
+					if ( (item as PcMeetingVo).meetingDatetime is Date) {
+						return String( ( (item as PcMeetingVo).meetingDatetime as Date).getMonth() + 1 );
+					}
+				}
+				
+				return '0';
+			}			
+			
+			
+			public function evaluateMeeting(meeting:PcMeetingVo):void {
+				var win:MeetingHandlerView = new MeetingHandlerView();
+				win.agency = agency;
+				win.meeting = meeting;
+				win.parentView = this;
+				win.type = PCConst.WORKFLOW_TYPE_EVALUATE;
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+			public function deleteMeeting():void {
+				Alert.yesLabel = '确认';
+				Alert.noLabel = '取消';	
+				Alert.show('请确认是否要删除?', '',  Alert.YES | Alert.NO, this, onDeleteConfirm);
+			}			
+			
+			protected function onDeleteConfirm(event:CloseEvent):void {
+				if (event.detail == Alert.YES) {
+					var evt:PcMeetingEvent = new PcMeetingEvent(PcMeetingEvent.DELETE_MEETING);
+					evt.meeting = datagrid.selectedItem as PcMeetingVo;
+					evt.successCallback = onDeleteMeetingSuccess;
+					evt.failureCallback = onDeleteMeetingFailure;
+					this.enabled = false;
+					evt.dispatch();					
+					
+				}
+			}
+			
+			private function onDeleteMeetingSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show('删除成功');
+				this.refreshData();
+			}
+			
+			private function onDeleteMeetingFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show('删除失败');
+			}	
+			
+			private function onItemDoubleClick():void {
+				if (datagrid.selectedItem) {
+					evaluateMeeting(datagrid.selectedItem as PcMeetingVo);
+				}
+			}			
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%">
+		<mx:HBox >
+			<mx:Label text="类型:"/>
+			<mx:ComboBox id="typeCmb"/>
+			<mx:Label text="季度:"/>
+			<mx:ComboBox id="quarterCmb" />		
+			<mx:Label text="状态:"/>
+			<mx:ComboBox id="statusCmb" />
+			<mx:Button label="查找" click="refreshData()"/>
+		</mx:HBox>		
+		<mx:AdvancedDataGrid id="datagrid" width="100%" height="100%" 
+							 headerStyleName="dataGridHeader"
+							 dataProvider="{dp}"
+							 doubleClickEnabled="true"
+							 doubleClick="onItemDoubleClick()">
+			<mx:columns>
+				<!--<mx:AdvancedDataGridColumn headerText="序号" dataField="id"/>-->
+				<mx:AdvancedDataGridColumn headerText="会议类型" dataField="typeId"
+										   labelFunction="typeLblFunc"/>
+				<mx:AdvancedDataGridColumn headerText="党组织" dataField="agencyName"
+										   />
+				<mx:AdvancedDataGridColumn headerText="年度" dataField="year"/>
+				<mx:AdvancedDataGridColumn headerText="季度" dataField="quarter"
+										   labelFunction="quarterLblFunc"/>
+				<mx:AdvancedDataGridColumn headerText="月份" dataField="month"
+										   labelFunction="monthLblFunc"/>
+				<mx:AdvancedDataGridColumn headerText="操作">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:Box horizontalAlign="center" verticalAlign="middle"
+									horizontalScrollPolicy="off" verticalScrollPolicy="off">
+								<fx:Script>
+									<![CDATA[
+										import com.partycommittee.model.ModelLocator;
+										import com.partycommittee.util.UserUtil;
+										import com.partycommittee.vo.PcMeetingVo;
+										protected function evaluateBtnClick():void {
+											outerDocument.evaluateMeeting(data as PcMeetingVo);
+										}
+										
+										protected function formatActionButtonLabel(item:Object):String {											
+
+											if (item && (item as PcMeetingVo).statusId == 3  ) {
+												if (UserUtil.checkRole(3, ModelLocator.getInstance().loginUser.roles) == true) {
+													return '评语';
+												}
+											}
+											
+											if (item && (item as PcMeetingVo).statusId == 4  ) {
+												if (UserUtil.checkRole(4, ModelLocator.getInstance().loginUser.roles) == true) {
+													return '评价';
+												}
+											}
+											return '查看';											
+											
+											
+										}											
+										
+									]]>
+								</fx:Script>
+								<button:PcButton id="editBtn" label="{formatActionButtonLabel(data as PcMeetingVo)}" click="evaluateBtnClick()"/>
+							</mx:Box>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:AdvancedDataGridColumn>
+				
+				<mx:AdvancedDataGridColumn headerText="" visible="{UserUtil.checkRole(6, ModelLocator.getInstance().loginUser.roles)}">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:HBox horizontalAlign="center" verticalAlign="middle"
+									 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+								<fx:Script>
+									<![CDATA[
+										import com.partycommittee.util.UserUtil;
+										import com.partycommittee.vo.PcMeetingVo;
+										
+										protected function deleteClick():void {
+											outerDocument.deleteMeeting();
+										}
+									]]>
+								</fx:Script>							
+								<button:PcButton id="deleteBtn" label="删除" click="deleteClick()"/>
+							</mx:HBox>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:AdvancedDataGridColumn>					
+			</mx:columns>
+		</mx:AdvancedDataGrid>
+	</mx:VBox>
+	
+</navigation:NavigationView>

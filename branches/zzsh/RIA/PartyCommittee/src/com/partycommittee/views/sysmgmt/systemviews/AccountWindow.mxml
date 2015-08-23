@@ -1,0 +1,318 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" 
+					  title="建立账号" titleStyleName="panelTitle"
+					  close="PopUpManager.removePopUp(this)" 
+					  xmlns:button="com.partycommittee.control.button.*"
+					  horizontalScrollPolicy="off" verticalScrollPolicy="off"
+					  creationComplete="onCreationCompleted()" 
+					  xmlns:tree="com.partycommittee.control.tree.*" 
+					  xmlns:systemviews="com.partycommittee.views.sysmgmt.systemviews.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcAgencyEvent;
+			import com.partycommittee.events.PcUserEvent;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.vo.PcRoleVo;
+			import com.partycommittee.vo.PcUserRoleVo;
+			import com.partycommittee.vo.PcUserVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			import mx.validators.EmailValidator;
+			
+			public var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			public var type:String = CRUDEventType.CREATE;
+			
+			public var parentView:AccountManageView;
+			
+			private var _userVo:PcUserVo;
+			[Bindable]
+			public function get userVo():PcUserVo {
+				return this._userVo;
+			}
+			public function set userVo(value:PcUserVo):void {
+				this._userVo = value;
+			}
+			
+			private function onCreationCompleted():void {
+				updateData();
+				if (type == CRUDEventType.CREATE) {
+					updatePwCk.selected = true;
+				}
+			}
+			
+			private function updateData():void {
+				initRoleCkGroup();
+				if (!this._userVo) {
+					return;
+				}
+				statucCk.selected = (this._userVo.status == 1);
+				usernameTxt.text = this._userVo.username;
+				emailTxt.text = this._userVo.email;
+				telTxt.text = this._userVo.phone;
+				commentTxt.text = this._userVo.description;
+				
+				if (this._userVo.privilege) {
+					privilegeView.agencyIdArry = this._userVo.privilege.split(",");
+				}
+				
+				setRoleCkGroup();
+			}
+			
+			private function initRoleCkGroup():void {
+				var data:ArrayCollection = model.roleCollection;
+				for (var i=0; i< data.length; i++) {
+					var vo:PcRoleVo = data.getItemAt(i) as PcRoleVo;
+					var ck:CheckBox = new CheckBox();
+					ck.label = vo.name;
+					if (i == 0) ck.selected = true;
+					role_ck_group.addChild(ck);
+				}
+			}
+			
+			private function setRoleCkGroup():void {
+				var data:ArrayCollection = this._userVo.roles as ArrayCollection;
+				var checkboxs:Array = role_ck_group.getChildren();
+				for(var i = 0; i < checkboxs.length; i++) {
+					var vo:CheckBox = checkboxs[i] as CheckBox;
+					for (var j = 0; j < data.length; j++) {
+						if ( int(i + 1) == int(data.getItemAt(j)) ) {
+							vo.selected = true;
+						}
+						
+					}
+				}
+			}			
+
+			private function save():void {
+				if (passwordTxt.text != confirmPwTxt.text) {
+					Alert.show("两次密码输入不一致！");
+					return;
+				}
+
+				if (type == CRUDEventType.CREATE) {
+					doCreate();
+				} else {
+					doUpdate();
+				}
+			}
+			
+			private function doCreate():void {
+				var newUser:PcUserVo = getNewUser();
+				if (!newUser) {
+					return;
+				}
+				if (!newUser.password || newUser.password == "") {
+					Alert.show("密码不能为空！");
+					return;
+				}
+				
+				// 检查用户唯一性:
+				var userEvt:PcUserEvent = new PcUserEvent(PcUserEvent.CHECKONLY, newUser);
+				userEvt.successCallback = onCheckOnlySuccessCallback;
+				userEvt.failureCallback = onCheckOnlyFailureCallback;
+				this.enabled = false;
+				userEvt.dispatch();				
+				
+				
+
+			}
+			
+			private function doUpdate():void {
+				var updateUser:PcUserVo = getUpdateUser();
+				if (!updateUser) {
+					return;
+				}
+				// 检查用户唯一性:
+				var userEvt:PcUserEvent = new PcUserEvent(PcUserEvent.CHECKONLY, updateUser);
+				userEvt.successCallback = onCheckOnlySuccessCallback;
+				userEvt.failureCallback = onCheckOnlyFailureCallback;
+				this.enabled = false;
+				userEvt.dispatch();	
+			}
+			
+			private function onCheckOnlySuccessCallback(data:Object, evt:PcUserEvent):void {
+				this.enabled = true;
+				var dp:ArrayCollection = data as ArrayCollection;
+				if (dp.length > 0) {
+					Alert.show("用户名重复,请重新填写！");
+					return;
+				}
+				
+				
+				if (type == CRUDEventType.CREATE) {
+					var newUser:PcUserVo = getNewUser();
+					var userEvt:PcUserEvent = new PcUserEvent(CRUDEventType.CREATE, newUser);
+					userEvt.successCallback = onSuccessCallback;
+					userEvt.failureCallback = onFailureCallback;
+					this.enabled = false;
+					userEvt.dispatch();					
+				} else {
+					var updateUser:PcUserVo = getUpdateUser();
+					var userEvt:PcUserEvent = new PcUserEvent(CRUDEventType.UPDATE, updateUser);
+					userEvt.successCallback = onSuccessCallback;
+					userEvt.failureCallback = onFailureCallback;
+					this.enabled = false;
+					userEvt.dispatch();					
+				}
+			}
+			
+			private function onCheckOnlyFailureCallback(info:Object, evt:PcUserEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}			
+			
+			
+			
+			private function getNewUser():PcUserVo {
+				var newUser:PcUserVo = new PcUserVo();
+				newUser.status = statucCk.selected ? 1 : 0;
+				newUser.email = emailTxt.text;
+				newUser.phone = telTxt.text;
+				newUser.username = usernameTxt.text;
+				if (updatePwCk.selected) {
+					if (passwordTxt.text == "") {
+						Alert.show("密码不能为空！");
+						return null;
+					}
+					if (passwordTxt.text != confirmPwTxt.text) {
+						Alert.show("两次输入的密码不一致！");
+						return null;
+					}
+					newUser.password = passwordTxt.text;
+				}
+				newUser.description = commentTxt.text;
+				newUser.privilege = privilegeView.agencyIdArry.join(",");
+				
+				
+				var selectRols:ArrayCollection = new ArrayCollection();
+				var checkboxs:Array = role_ck_group.getChildren();
+				var hasSelected:Boolean = false;
+				for(var i = 0; i < checkboxs.length; i++) {
+					if ( (checkboxs[i] as CheckBox).selected == true ) {
+						selectRols.addItem(i+1);
+						hasSelected = true;
+					}
+				}
+
+				if (!hasSelected) {
+					Alert.show("请至少选择一项权限");
+					return null;
+				}
+				newUser.roles = new ArrayCollection();
+				newUser.roles = selectRols;				
+				
+				
+				return newUser;
+			}
+			
+			private function getUpdateUser():PcUserVo {
+				var updateUser:PcUserVo = getNewUser();
+				if (!updateUser) {
+					return null;	
+				}
+				updateUser.id = userVo.id;
+				if (updatePwCk.selected == false) {
+					updateUser.password = userVo.password;
+				}
+				
+				var selectRols:ArrayCollection = new ArrayCollection();
+				var checkboxs:Array = role_ck_group.getChildren();
+				var hasSelected:Boolean = false;
+				for(var i = 0; i < checkboxs.length; i++) {
+					if ( (checkboxs[i] as CheckBox).selected == true ) {
+						selectRols.addItem(i+1);
+						hasSelected = true;
+					}
+				}
+				
+				if (!hasSelected) {
+					Alert.show("请至少选择一项权限");
+					return null;
+				}				
+				updateUser.roles = new ArrayCollection();
+				updateUser.roles = selectRols;				
+				
+				return updateUser;
+			}
+			
+			private function onSuccessCallback(data:Object, evt:PcUserEvent):void {
+				this.enabled = true;
+				parentView.refreshData();
+				this.close();
+			}
+			
+			private function onFailureCallback(info:Object, evt:PcUserEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			private function choose():void {
+				this.currentState = "privilege";
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:HBox id="mainContainer" width="100%" height="100%"
+			 horizontalAlign="center" verticalAlign="middle"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:VBox height="100%" width="100%"
+				 horizontalAlign="center" verticalAlign="middle"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Form width="600" height="100%" labelWidth="60"
+					 minWidth="200">
+				<mx:FormItem label="启用:" width="100%">
+					<mx:CheckBox id="statucCk" selected="true"/>
+				</mx:FormItem>
+				<mx:FormItem label="用户名:" width="100%">
+					<mx:TextInput id="usernameTxt" width="100%"/>
+				</mx:FormItem>
+				<mx:FormItem label="修改密码:" width="100%"
+							 visible="{type == CRUDEventType.UPDATE}" includeInLayout="{type == CRUDEventType.UPDATE}">
+					<mx:CheckBox id="updatePwCk"/>
+				</mx:FormItem>
+				<mx:FormItem label="密码:" required="true" width="100%"
+							 visible="{updatePwCk.selected}" includeInLayout="{updatePwCk.selected}">
+					<mx:TextInput id="passwordTxt" width="100%" displayAsPassword="true"/>
+				</mx:FormItem>
+				<mx:FormItem label="确认密码:" required="true" width="100%"
+							 visible="{updatePwCk.selected}" includeInLayout="{updatePwCk.selected}">
+					<mx:TextInput id="confirmPwTxt" width="100%" displayAsPassword="true"/>
+				</mx:FormItem>
+				<mx:FormItem label="Email:" width="100%">
+					<mx:TextInput id="emailTxt" width="100%"/>
+				</mx:FormItem>
+				<mx:FormItem label="电话:" width="100%">
+					<mx:TextInput id="telTxt" width="100%" restrict="0-9\-"/>
+				</mx:FormItem>
+				<mx:FormItem label="备注:" width="100%">
+					<mx:TextArea id="commentTxt" width="100%" height="60"/>
+				</mx:FormItem>
+				
+				<mx:FormItem id="role_ck_group" label="相关权限:" direction="horizontal" width="100%">
+					
+				</mx:FormItem>				
+				
+			</mx:Form>
+			<mx:ControlBar width="100%" horizontalAlign="center">
+				<button:PcButton label="保存" click="save()"/>
+				<button:PcButton label="取消" click="close()"/>
+			</mx:ControlBar>
+		</mx:VBox>
+		<mx:VRule height="90%"/>
+		<systemviews:PrivilegeView id="privilegeView" width="230" height="100%"/>
+	</mx:HBox>
+	
+</control:EscapeWindow>

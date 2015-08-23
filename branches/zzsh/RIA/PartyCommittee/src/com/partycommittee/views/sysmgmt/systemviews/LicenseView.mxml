@@ -1,0 +1,159 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						   xmlns:s="library://ns.adobe.com/flex/spark" 
+						   xmlns:mx="library://ns.adobe.com/flex/mx"
+						   styleName="mainCanvas"
+						   width="100%" height="100%" 
+						   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+						   xmlns:components="com.lnczx.components.*"
+						   xmlns:button="com.partycommittee.control.button.*"
+						   creationComplete="init()">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.events.PcLicenseEvent;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.vo.PcLicenseVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.events.PropertyChangeEvent;
+			
+			import spark.components.ComboBox;
+			
+			import flash.net.FileReference;  
+			import mx.events.CloseEvent;  
+			
+			private var file:FileReference;  			
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			private function init():void  
+			{  
+				
+			}  
+			
+			private function upload():void {
+				Security.allowDomain("*");  
+				file = new FileReference();
+				file.addEventListener(Event.SELECT, onSelect);  
+				file.addEventListener(Event.CANCEL,onCancel);
+				file.browse();
+			}
+			
+			private function onSelect(e:Event):void{
+				file.removeEventListener(Event.SELECT, onSelect);
+				//listen for when the file has loaded
+
+				file.addEventListener(Event.COMPLETE, onLoadComplete);
+				
+				//listen for any errors reading the file
+				file.addEventListener(IOErrorEvent.IO_ERROR, onLoadError);
+				
+				//load the content of the file
+				file.load();
+			}
+			
+			private function onLoadComplete(e:Event):void{
+				file.removeEventListener(Event.COMPLETE, onLoadComplete);
+				
+				//get the data from the file as a ByteArray
+				var data:ByteArray = file.data as ByteArray;
+				
+				var dataReaded:String = data.readUTFBytes(data.bytesAvailable);
+				
+				//Alert.show(dataReaded);
+				if (dataReaded) {
+					save(dataReaded);
+				}
+				//clean up the FileReference instance
+				file = null;
+			}			
+			
+			private function onLoadError(e:IOErrorEvent):void{
+				
+			}			
+			
+			private function onCancel(e:Event):void{
+				file = null;
+			}			
+			
+			private function save(license_info:String):void {
+				save_btn.enabled = false;
+				var evt:PcLicenseEvent = new PcLicenseEvent(PcLicenseEvent.SET_LICENSE);
+				evt.enstr = license_info;
+				evt.licensetips = model.license.tips;
+				evt.successCallback = onSetLicenseSuccess;
+				evt.failureCallback = onSetLicenseFailure;
+				evt.dispatch();
+			}		
+			
+			private function onSetLicenseSuccess(data:Object, evt:PcLicenseEvent):void {
+				save_btn.enabled = true;
+				if (!data)  {
+					Alert.show("无效的授权信息!");
+					return;
+				}
+				model.license = data as PcLicenseVo;
+				
+				productno_txt.text = model.license.productno;
+				license_info_text.text = "目前为试用版，最多能够建" + model.license.locknodw.toString() + "个党委数和" + model.license.locknozb.toString() + "个党支部";
+				Alert.show("授权成功,请重启tomcat后生效");
+				save_btn.enabled = true;
+			}	
+			
+			private function onSetLicenseFailure(data:Object, evt:PcLicenseEvent):void {
+				Alert.show("无效的授权信息!");
+				save_btn.enabled = true;
+			}			
+			
+
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<navigation:constraintRows>
+		<s:ConstraintRow id="headerRow" height="30"/>
+		<s:ConstraintRow id="mainRow" height="100%"/>
+	</navigation:constraintRows>
+	
+	<mx:VBox width="100%" top="mainRow:0" bottom="mainRow:0">
+		
+		<mx:Form width="600" height="100%"
+				 minWidth="200"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			
+			<mx:FormItem label="版  本：" >
+				<mx:Label text="基层党支部组织生活管理系统v1.0"/>
+			</mx:FormItem>
+			<mx:FormItem label="产品序号:" >
+				<mx:Label id="productno_txt" text="{model.license.productno}" />
+			</mx:FormItem>
+			<mx:FormItem id="license_info_itme" label="授  权：" >
+					<mx:Label id="license_info_text" text="目前为试用版，最多能够建{model.license.locknodw.toString()}个党委数和{model.license.locknozb.toString()}个党支部"/>
+			</mx:FormItem>
+			
+			<mx:FormItem id="company_info" label="公 司：" >
+				<mx:Label id="company_info_text" text="北京宏景世纪软件有限公司"/>
+			</mx:FormItem>	
+			
+			<mx:FormItem id="url_info" label="网  址：" >
+				<mx:Label id="url_info_text" text="www.hjsoft.com.cn"/>
+			</mx:FormItem>
+
+			<mx:FormItem label="注册文件上传（加密文件）:" >
+				<button:PcButton label="上传" id="save_btn" click="upload()"/>
+			</mx:FormItem>	
+			
+		</mx:Form>		
+	</mx:VBox>
+	
+</navigation:NavigationView>

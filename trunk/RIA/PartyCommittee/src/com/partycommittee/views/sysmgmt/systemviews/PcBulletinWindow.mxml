@@ -1,0 +1,181 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" 
+					  width="600" height="600" 
+					  title="建立公告" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  xmlns:button="com.partycommittee.control.button.*"
+					  horizontalScrollPolicy="off" verticalScrollPolicy="off" 
+					  xmlns:component="com.partycommittee.views.partymember.component.*"
+					  xmlns:richtexttoolbar="com.partycommittee.control.richtexttoolbar.*"
+					  creationComplete="onCreationCompleted()" xmlns:dateselect="com.partycommittee.control.dateselect.*">
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.events.PcBulletinEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DateUtil;
+			import com.partycommittee.vo.PcBulletinVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			
+			[Bindable]
+			public var type:String = CRUDEventType.CREATE;
+			
+			public var parentView:Object;
+			
+			private var _editEnable:Boolean = true;
+			[Bindable]
+			public function get editEnable():Boolean {
+				return this._editEnable;
+			}
+			public function set editEnable(value:Boolean):void {
+				this._editEnable = value;
+			}
+			
+			private var _bulletinVo:PcBulletinVo;
+
+			[Bindable]
+			public function get bulletinVo():PcBulletinVo {
+				return this._bulletinVo;
+			}
+			public function set bulletinVo(value:PcBulletinVo):void {
+				this._bulletinVo = value;
+			}
+						
+			private function onCreationCompleted():void {
+				
+				var default_expireTime:Date = DateUtilExt.getNextSomeMonth(DateUtilExt.now(), 3);
+				expireTime.selectedDate = default_expireTime;
+				updateData();
+			}
+			
+			private function updateData():void {
+				if (!this._bulletinVo) {
+					return;
+				}
+				titleTxt.text = bulletinVo.title ;
+				textArea.htmlText = bulletinVo.content;
+				isIndexCk.selected =  bulletinVo.isIndex == 1 ? true : false;
+				expireTime.selectedDate = bulletinVo.expireTime;
+			}
+			
+			private function formValidate():Boolean {
+				
+				if (titleTxt.text.length == 0) {
+					Alert.show("标题不能为空!");
+					return false;
+				}
+				
+				if (textArea.htmlText.length == 0) {
+					Alert.show("内容不能为空!");
+					return false;
+				}
+				
+				var cur_date:Date  = DateUtilExt.now();
+				if (DateUtilExt.before(expireTime.selectedDate, cur_date)) {
+					Alert.show("过期时间必须大于当前时间!");
+					return false;
+				}
+
+				return true;
+			}			
+			
+			private function save():void {
+				if (formValidate() == true) {	
+					if (bulletinVo) {
+						doUpdate();
+					} else {
+						doCreate();
+					}
+					
+				}
+				
+			}
+			
+			private function doCreate():void {
+				var vo:PcBulletinVo = getnewPcBulletin();
+				var evt:PcBulletinEvent = new PcBulletinEvent(CRUDEventType.CREATE, vo);
+				evt.successCallback = onSuccessCallback;
+				evt.failureCallback = onFailureCallback;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function doUpdate():void {
+				var vo:PcBulletinVo = getUpdateBulletin();
+				var evt:PcBulletinEvent = new PcBulletinEvent(CRUDEventType.UPDATE, vo);
+				evt.successCallback = onSuccessCallback;
+				evt.failureCallback = onFailureCallback;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function onSuccessCallback(data:Object, evt:PcBulletinEvent):void {
+				this.enabled = true;
+				parentView.updateData();
+				this.close();
+			}
+			
+			private function onFailureCallback(info:Object, evt:PcBulletinEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			private function getnewPcBulletin():PcBulletinVo {
+				var vo:PcBulletinVo = new PcBulletinVo();
+				vo.title = titleTxt.text;
+				vo.content = textArea.htmlText;
+				vo.isIndex =  isIndexCk.selected ? 1 : 0;
+				vo.expireTime = expireTime.selectedDate;
+				vo.member = '';
+				return vo;
+			}
+			
+			private function getUpdateBulletin():PcBulletinVo {
+				var vo:PcBulletinVo = getnewPcBulletin();
+				vo.id = bulletinVo.id;
+				return vo;
+			}			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox height="100%" width="100%"
+			 horizontalAlign="center" verticalAlign="middle"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:Form width="600" height="100%"
+				 minWidth="200"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:FormItem label="标题:" width="100%">
+				<mx:TextInput id="titleTxt"  maxChars="50"/>
+			</mx:FormItem>
+			<mx:FormItem label="内容:" width="100%" height="100%">
+				<richtexttoolbar:PopupRichTextToolBar width="100%" target="{textArea}" />
+				<mx:TextArea id="textArea" width="100%" height="100%"/>
+			</mx:FormItem>
+			<mx:FormItem label="发布到首页:" required="true" width="100%">
+				<mx:CheckBox id="isIndexCk"/>
+			</mx:FormItem>
+			<mx:FormItem label="过期时间:" width="100%">
+				<mx:DateField id="expireTime" width="100%" selectedDate="{DateUtilExt.now()}"
+							  formatString="YYYY-MM-DD"/>
+			</mx:FormItem>
+		</mx:Form>
+		<mx:ControlBar width="100%" horizontalAlign="center">
+			<button:PcButton label="保存" click="save()" visible="{editEnable}"/>
+			<button:PcButton label="取消" click="close()"/>
+		</mx:ControlBar>
+	</mx:VBox>
+</control:EscapeWindow>

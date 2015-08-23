@@ -1,0 +1,227 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx" 
+		   width="100%" height="100%"
+		   creationComplete="onCreationCompleted()" 
+		   xmlns:button="com.partycommittee.control.button.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcMeetingEvent;
+			import com.partycommittee.events.PcWorkPlanEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.LblFunctionHelper;
+			import com.partycommittee.util.UserUtil;
+			import com.partycommittee.util.WorkPlanCodeUtil;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcMeetingVo;
+			import com.partycommittee.vo.PcWorkPlanVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.events.FlexEvent;
+			import mx.events.PropertyChangeEvent;
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			public var browseMode:Boolean = false;
+
+			[Bindable]
+			private var dp:ArrayCollection = new ArrayCollection();
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			private var _type:Number;
+			[Bindable]
+			public function get type():Number {
+				return this._type;
+			}
+			public function set type(value:Number):void {
+				this._type = value;
+			}
+			
+			private var year:Number;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			private function onCreationCompleted():void {
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+				addEventListener(FlexEvent.SHOW, onViewShow);
+				this.year = model.reportYear;
+//				updateData();
+			}
+			
+			private function onPropertyChanged(event:PropertyChangeEvent):void {
+				if (event.property == "reportYear") {
+					this.year = model.reportYear;
+//					if (this.tab && this.tab.selectedChild == this) {
+						updateData();
+//					}
+				}
+			}
+			
+			private function onViewShow(event:FlexEvent):void {
+				if (agency) {
+					updateData();
+				}
+			}
+			
+			public function updateData():void {				
+				getMeetingList();
+			}
+			
+			private function getMeetingList():void {
+				var evt:PcMeetingEvent = new PcMeetingEvent(PcMeetingEvent.GET_MEETING_LIST);
+				evt.agency = agency;
+				evt.year = year;
+				evt.meetingType = type;
+				evt.successCallback = onMeetingListSuccess;
+				evt.failureCallback = onMeetingListFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}			
+			
+			private function onMeetingListSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				dp = data as ArrayCollection;
+			}
+			
+			private function onMeetingListFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}			
+
+			public function editMeeting(meeting:PcMeetingVo):void {
+				var win:MeetingView = new MeetingView();
+				win.agency = agency;
+				win.meeting = meeting;
+				win.meetingType = type;
+				win.parentView = this;
+				win.detailMode = true;
+				if (UserUtil.checkRole(2, model.loginUser.roles) == true) {
+					win.detailMode = false;
+				} 				
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+			public function submitMeeting(meeting:PcMeetingVo):void {
+				var evt:PcMeetingEvent = new PcMeetingEvent(PcMeetingEvent.SUBMIT_MEETING);
+				evt.meeting = meeting;
+				evt.successCallback = onSubmitMeetingSuccess;
+				evt.failureCallback = onSubmitMeetingFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function onSubmitMeetingSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				updateData();
+			}
+			
+			private function onSubmitMeetingFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			public function browseMeeting(meeting:PcMeetingVo):void {
+				var win:MeetingView = new MeetingView();
+				win.detailMode = true;
+				win.agency = agency;
+				win.meeting = meeting;
+				win.meetingType = type;
+				win.parentView = this;
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+			private function onNewMeetingClick():void {
+				var win:MeetingView = new MeetingView();
+				win.agency = agency;
+				win.meetingType = type;
+				win.parentView = this;
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+			private function onItemDoubleClick():void {
+				editMeeting(dg.selectedItem as PcMeetingVo);
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+
+	</fx:Declarations>
+	<mx:VBox height="100%" width="100%">
+		<mx:AdvancedDataGrid id="dg" dataProvider="{dp}" width="100%" height="100%"
+							 doubleClickEnabled="true"
+							 doubleClick="onItemDoubleClick()">
+			<mx:columns>
+				<mx:AdvancedDataGridColumn headerText="年度" dataField="year"/>
+				<mx:AdvancedDataGridColumn headerText="季度" dataField="quarter" 
+										   labelFunction="{LblFunctionHelper.workPlanQuarterLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="月份" dataField="month"/>
+				<mx:AdvancedDataGridColumn headerText="会议" dataField="typeId"
+										   labelFunction="{LblFunctionHelper.workPlanTypeLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="召开时间" dataField="meetingDatetime"
+										   labelFunction="{LblFunctionHelper.dateLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="状态" dataField="statusId"
+										   labelFunction="{LblFunctionHelper.workPlanStatusLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="操作">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:Box horizontalAlign="center" verticalAlign="middle"
+									horizontalScrollPolicy="off" verticalScrollPolicy="off">
+								<fx:Script>
+									<![CDATA[
+										import com.partycommittee.model.ModelLocator;
+										import com.partycommittee.util.UserUtil;
+										import com.partycommittee.vo.PcMeetingVo;
+										protected function editBtnClick():void {
+											outerDocument.editMeeting(data as PcMeetingVo);
+										}
+										
+										protected function formatActionButtonLabel(item:Object):String {											
+											if (item && (item as PcMeetingVo).statusId >=3 ) {
+												
+												return '查看';
+											} else {
+												if (UserUtil.checkRole(2, ModelLocator.getInstance().loginUser.roles) == true) {
+													if (item && (item as PcMeetingVo).id ==0 ) {
+														return '填报';
+													} else {
+														return '修改';
+													} 
+													
+												} else {
+													return '查看';
+												}
+											}
+											return 'text';
+										}											
+									]]>
+								</fx:Script>
+								<button:PcButton id="editBtn" label="{formatActionButtonLabel(data as PcMeetingVo)}" click="editBtnClick()"/>
+							</mx:Box>
+						</fx:Component>
+					</mx:itemRenderer>
+				</mx:AdvancedDataGridColumn>
+
+			</mx:columns>
+		</mx:AdvancedDataGrid>
+		<mx:ControlBar width="100%" height="32"
+					   horizontalAlign="right" visible="{!browseMode}">
+			<mx:Button id="createMeetingBtn" label="新建" click="onNewMeetingClick()"/>
+		</mx:ControlBar>
+	</mx:VBox>
+	
+</mx:Canvas>

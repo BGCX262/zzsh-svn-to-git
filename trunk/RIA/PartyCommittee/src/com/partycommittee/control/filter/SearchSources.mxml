@@ -1,0 +1,117 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:VBox xmlns:mx="http://www.adobe.com/2006/mxml"
+         xmlns:vmware="http://www.vmware.com/flex-widgets"
+         creationComplete="init()"
+         styleName="searchPopupDialog">
+
+   <mx:Script>
+      <![CDATA[
+         import mx.collections.ArrayCollection;
+         import mx.events.FlexMouseEvent;
+         import mx.events.SandboxMouseEvent;
+         import mx.managers.ISystemManager;
+         import mx.managers.PopUpManager;
+
+         [Bindable]
+         public var filterDataProvider:ArrayCollection;
+
+         [Bindable]
+         public var filterSelectedIndices:ArrayCollection;
+
+         private function init():void {
+            addEventListener(FlexMouseEvent.MOUSE_DOWN_OUTSIDE, onCancel);
+            addEventListener(FlexMouseEvent.MOUSE_WHEEL_OUTSIDE, onCancel);
+            addEventListener(SandboxMouseEvent.MOUSE_DOWN_SOMEWHERE, onCancel);
+            addEventListener(SandboxMouseEvent.MOUSE_WHEEL_SOMEWHERE, onCancel);
+
+            //weak reference to stage
+            var sm:ISystemManager = systemManager.topLevelSystemManager;
+            sm.getSandboxRoot().addEventListener(Event.RESIZE, onCancel, false, 0, true);
+
+            updateUI();
+         }
+
+         private function onSelAll(event:*):void {
+            const num:int = filterDataProvider.length;
+            for (var ii:int = 0; ii < num; ++ ii) {
+               checkBox[ii].selected = true;
+            }
+
+            this.okButton.enabled = true;
+         }
+
+         private function onDeselAll(event:*):void {
+            const num:int = filterDataProvider.length;
+            for (var ii:int = 0; ii < num; ++ ii) {
+               checkBox[ii].selected = false;
+            }
+
+            this.okButton.enabled = false;
+         }
+
+         private function onOK(event:*):void {
+            updateData();
+            PopUpManager.removePopUp(this);
+         }
+
+         private function onCancel(event:*):void {
+            PopUpManager.removePopUp(this);
+         }
+
+         private function onCheck(event:*):void {
+            this.okButton.enabled = hasColumnSelected();
+         }
+
+         private function updateUI():void {
+            const num:int = filterDataProvider.length;
+            for (var ii:int = 0; ii < num; ++ ii) {
+               checkBox[ii].selected = filterSelectedIndices.contains(ii);
+            }
+         }
+
+         private function updateData():void {
+            filterSelectedIndices.removeAll();
+
+            const num:int = filterDataProvider.length;
+            for (var ii:int = 0; ii < num; ++ ii) {
+               if (checkBox[ii].selected) {
+                  filterSelectedIndices.addItem(ii);
+               }
+            }
+         }
+
+         private function hasColumnSelected():Boolean {
+            const num:int = filterDataProvider.length;
+            for (var ii:int = 0; ii < num; ++ ii) {
+               if (checkBox[ii].selected == true) {
+                  return true;
+               }
+            }
+
+            return false;
+         }
+      ]]>
+   </mx:Script>
+
+   <mx:Label text="{ResourceUtil.getString(AppConstants.RESOURCES, 'searchBox.desc')}" styleName="searchColumnsDesc"/>
+   <mx:HBox width="100%">
+      <mx:LinkButton id="selAllBtn"
+                     label="{ResourceUtil.getString(AppConstants.RESOURCES, 'searchBox.selAll')}"
+                     click="onSelAll(event)"/>
+      <mx:VRule height="20"/>
+      <mx:LinkButton id="deselAllBtn"
+                     label="{ResourceUtil.getString(AppConstants.RESOURCES, 'searchBox.deselAll')}"
+                     click="onDeselAll(event)"/>
+   </mx:HBox>
+
+   <mx:Repeater id="rp" dataProvider="{filterDataProvider}">
+      <mx:CheckBox id="checkBox" label="{rp.currentItem.label as String}" selected="true" change="onCheck(event)"/>
+   </mx:Repeater>
+
+   <mx:HRule width="100%"/>
+   <mx:HBox width="100%" horizontalAlign="right" paddingTop="3">
+      <mx:Button id="okButton"
+                 label="{ResourceUtil.getString(AppConstants.RESOURCES, 'dialog.ok')}"
+                 click="onOK(event)"/>
+   </mx:HBox>
+</mx:VBox>

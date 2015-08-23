@@ -1,0 +1,143 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 width="100%"
+		 creationComplete="onCreationCompleted()">
+	<fx:Script>
+		<![CDATA[
+			import mx.collections.ArrayCollection;
+			
+			private var _date:Date;
+			[Bindable]
+			public function get date():Date {
+				if (clearCk.selected) {
+					return null;
+				}
+				_date = new Date();
+				_date.setFullYear(yearCmb.selectedItem);
+				_date.setMonth((monthCmb.selectedItem as Number) - 1);
+				_date.setDate(dayCmb.selectedItem);
+				return this._date;
+			}
+			public function set date(value:Date):void {
+				this._date = value;
+				updateData();
+			}
+			
+			[Bindable]
+			private var yearDp:ArrayCollection;
+			
+			[Bindable]
+			private var monthDp:ArrayCollection;
+			
+			[Bindable]
+			private var dayDp:ArrayCollection;
+			
+			private function onCreationCompleted():void {
+				yearDp = createYearDp();
+				monthDp = createMonthDp();
+				dayDp = createDayDp();
+			}
+			
+			private function updateData():void {
+				if (this._date) {
+					clearCk.selected = false;
+					yearCmb.selectedItem = this._date.getFullYear();
+					monthCmb.selectedItem = this._date.getMonth() + 1;
+					dayCmb.selectedItem = this._date.getDate();
+				} else {
+					clearCk.selected = true;
+					yearCmb.selectedIndex = 0;
+					monthCmb.selectedIndex = 0;
+					dayCmb.selectedIndex = 0;
+				}
+			}
+			
+			private function createYearDp():ArrayCollection {
+				var yearCollection:ArrayCollection = new ArrayCollection();
+				var currentYear:Number = new Date().getFullYear();
+				for (var i:Number = 0; i <= 100; i++) {
+					yearCollection.addItem(currentYear - i);
+				}
+				return yearCollection;
+			}
+			
+			private function createMonthDp():ArrayCollection {
+				var monthCollection:ArrayCollection = new ArrayCollection();
+				for (var i:Number = 1; i <= 12; i++) {
+					monthCollection.addItem(i);
+				}
+				return monthCollection;
+			}
+			
+			private function createDayDp():ArrayCollection {
+				var dateCollection:ArrayCollection = new ArrayCollection();
+				for (var i:Number = 1; i <= 31; i++) {
+					dateCollection.addItem(i);
+				}
+				return dateCollection;
+			}
+			
+			public function updateDayDp():void
+			{
+				var month:int= monthCmb.selectedIndex + 1;
+				//Alert.show(dropMonth.selectedIndex.toString());
+				var dateCollection:ArrayCollection = new ArrayCollection();
+				dateCollection.removeAll();
+				//arrayDay.addItem("请选择")
+				
+				if (month==1 || month==3 || month==5 || month==7 || month==8 || month==10 || month==12)
+				{
+					for (var i:int=1;i<=31;i++)
+					{
+						dateCollection.addItem(i);
+					}
+				}
+					
+				else if (month==4 || month==6 || month==9 || month==11)
+				{
+					for (i=1;i<=30;i++)
+					{
+						dateCollection.addItem(i);
+					}
+				}
+					
+				else if (month==2)
+				{
+					var year:int = int(yearCmb.selectedItem);
+					
+					if ((year%4==0 && year%100!=0)||(year%400==0))
+					{
+						for (i=1;i<=29;i++)
+						{
+							dateCollection.addItem(i);
+						}
+					}
+						
+					else
+					{
+						for (i=1;i<=28;i++)
+						{
+							dateCollection.addItem(i);
+						}
+					}
+				}
+				dayDp.removeAll();
+				dayDp = dateCollection;
+			}			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:ComboBox id="yearCmb" dataProvider="{yearDp}" enabled="{!clearCk.selected}"/>
+	<mx:Label text="年"/>
+	<mx:ComboBox id="monthCmb" dataProvider="{monthDp}" enabled="{!clearCk.selected}" change="updateDayDp()"/>
+	<mx:Label text="月"/>
+	<mx:ComboBox id="dayCmb" dataProvider="{dayDp}" enabled="{!clearCk.selected}"/>
+	<mx:Label text="日"/>
+	<mx:CheckBox id="clearCk" label="清空"/>
+</mx:HBox>

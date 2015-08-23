@@ -1,0 +1,975 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						   xmlns:s="library://ns.adobe.com/flex/spark" 
+						   xmlns:mx="library://ns.adobe.com/flex/mx"
+						   styleName="mainCanvas"
+						   width="100%" height="100%" 
+						   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+						   creationComplete="onCreationCompleted()">
+	<fx:Style>
+		.centerAligned {
+			textAlign: center;
+			fontWeight: bold;
+		}
+	</fx:Style>	
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcMeetingEvent;
+			import com.partycommittee.events.PcRemindEvent;
+			import com.partycommittee.events.PcWorkPlanEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.renderers.RemindStatRenderer;
+			import com.partycommittee.renderers.WpStatusRenderer;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.LblFunctionHelper;
+			import com.partycommittee.util.WorkPlanCodeUtil;
+			import com.partycommittee.views.MainContainer;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.WorkPlanHandlerView;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcMeetingVo;
+			import com.partycommittee.vo.PcUserVo;
+			import com.partycommittee.vo.PcWorkPlanVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.SortField;
+			import mx.containers.TabNavigator;
+			import mx.containers.ViewStack;
+			import mx.controls.Alert;
+			import mx.controls.advancedDataGridClasses.AdvancedDataGridColumnGroup;
+			import mx.events.PropertyChangeEvent;
+			
+			import spark.collections.Sort;
+						
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			private var dp:ArrayCollection = new ArrayCollection();
+			
+			[Bindable]
+			private var agencyId:Number;
+			
+			private var c_y:Number;
+			
+			private var c_q:Number;
+			
+			private function onCreationCompleted():void {
+					
+					if (yearCmb) {
+						yearCmb.dataProvider = DataproviderFactory.getRangeYearForReport();
+						yearCmb.selectedItem = model.reportYear = new Date().getFullYear();
+						//yearCmb.addEventListener(Event.CHANGE, onYearCmbChanged);
+					}	
+					
+					if (quarterCmb) {
+						quarterCmb.dataProvider = DataproviderFactory.createQuarterDp();
+						quarterCmb.selectedItem = getQuarter();
+					}			
+					c_y = yearCmb.selectedItem as Number;
+					c_q = quarterCmb.selectedItem as Number;
+					onNavigateIn();
+			}
+			
+			private function onPropertyChanged(event:PropertyChangeEvent):void {
+				if (event.property == "focusAgencyVo" ) {
+					//model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+					onNavigateIn();
+				} 
+			}
+			
+			override protected function onNavigateIn():void {
+
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+				if (dg) {
+					dg.addEventListener(TextEvent.LINK, onEventTextLink, false , 0, true);
+				}
+				
+				if (remindDg) {
+					remindDg.addEventListener(TextEvent.LINK, onEventTextLink, false , 0, true);
+				}
+//				updateData();
+			}
+			
+			override protected function onNavigateOut():void {
+				model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+			}
+			
+			public function updateData():void {
+				
+				dp = new ArrayCollection();
+				if (model.focusAgencyVo && model.focusAgencyVo.codeId == 10) {
+					RemindViewStack.selectedChild = AGrid;
+					var pcRemindEvt:PcRemindEvent = new PcRemindEvent(PcRemindEvent.GET_REAL_REMIND_BY_ID);
+					pcRemindEvt.agencyId = model.focusAgencyVo.id;
+					pcRemindEvt.year = c_y;
+					pcRemindEvt.quarter = c_q;
+					pcRemindEvt.successCallback = onGetRemindSuccess;
+					pcRemindEvt.failureCallback = onGetRemindFailure;
+					pcRemindEvt.dispatch();
+				} else {
+					if (model.isLeafUser) return;
+					RemindViewStack.selectedChild = MecGrid;
+					
+					if (model.focusAgencyVo) {
+						var eventType:String = PcRemindEvent.GET_REMIND_STAT_BY_PARENTID_FOR_ADMIN;
+						if (model.focusAgencyVo.id == 1) {
+							eventType = PcRemindEvent.GET_REMIND_STAT_BY_PARENTID_FOR_ADMIN;
+						} else {
+							eventType = PcRemindEvent.GET_REMIND_STAT_BY_ID;				
+						}
+						var pcRemindEvt:PcRemindEvent = new PcRemindEvent(eventType);
+						pcRemindEvt.agencyId = model.focusAgencyVo.id;
+						pcRemindEvt.year = c_y;
+						pcRemindEvt.quarter = c_q;
+						pcRemindEvt.successCallback = onGetRemindStatSuccess;
+						pcRemindEvt.failureCallback = onGetRemindStatFailure;
+						this.enabled = false;
+						pcRemindEvt.dispatch();
+					}
+				}				
+			}
+			
+			private function onGetRemindSuccess(data:Object, evt:PcRemindEvent):void {
+				if (data) {
+					dp.addAll(data as ArrayCollection);
+				}
+			}
+			
+			private function onGetRemindFailure(info:Object, evt:PcRemindEvent):void {
+				this.enabled = true;
+			}
+
+			private function onGetRemindStatSuccess(data:Object, evt:PcRemindEvent):void {
+				this.enabled = true;
+				initColumnsForAdmin();
+				initDpForAdmin(data as ArrayCollection);
+				StatsViewStack.selectedChild = stats;
+			}
+			
+			private function onGetRemindStatFailure(info:Object, evt:PcRemindEvent):void {
+				this.enabled = true;
+			}			
+						
+			public function initDpForAdmin(dp:ArrayCollection):void {
+
+				var datas:ArrayCollection = new ArrayCollection();
+				var tmpId:int = 0;
+				var vo:Object = new Object();
+				
+				
+				var numericDataSort:Sort = new Sort(); 
+				
+				var dataSortField:SortField = new SortField(); 
+				dataSortField.name = "agencyId"; 
+				dataSortField.numeric = true;
+				numericDataSort.fields = [dataSortField];
+				dp.sort = numericDataSort;
+				dp.refresh();
+				// 初始化数据
+
+				for(var i:int = 0; i<dp.length; i++) {
+					if (tmpId == 0 ) {
+						vo = initObjectForAdmin();
+
+						tmpId = dp.getItemAt(i).agencyId;
+					} else	if  (tmpId != dp.getItemAt(i).agencyId) {
+						datas.addItem(vo);
+						vo = initObjectForAdmin();
+						tmpId = dp.getItemAt(i).agencyId;
+					}
+					vo.name = dp.getItemAt(i).name;
+					vo.agencyId = dp.getItemAt(i).agencyId;
+					vo.q = c_q;
+					//年度计划
+					if (dp.getItemAt(i).typeId == 1) {
+						if (dp.getItemAt(i).statusId < 3) {
+							vo.y1 = parseInt(vo.y1) + parseInt(dp.getItemAt(i).c);
+						} 
+						
+						if (dp.getItemAt(i).statusId == 3) {
+							vo.y2 = parseInt(vo.y2) + parseInt(dp.getItemAt(i).c);
+//							vo.y2 = dp.getItemAt(i).c;
+						} 
+
+					}
+					
+					//季度计划
+					if (dp.getItemAt(i).typeId == 2) {
+						if (dp.getItemAt(i).statusId < 3) {
+							vo.q1 = parseInt(vo.q1) + parseInt(dp.getItemAt(i).c);
+						} 
+						
+						if (dp.getItemAt(i).statusId == 3) {
+							vo.q2 = parseInt(vo.q2) + parseInt(dp.getItemAt(i).c);
+//							vo.q2 = dp.getItemAt(i).c;
+						} 
+
+					}		
+					
+					//季度执行情况
+					if (dp.getItemAt(i).typeId == 3) {
+						if (dp.getItemAt(i).statusId < 3) {
+							vo.lq1 = parseInt(vo.lq1) + parseInt(dp.getItemAt(i).c);
+						} 
+						
+						if (dp.getItemAt(i).statusId == 3) {
+//							vo.lq2 = dp.getItemAt(i).c;
+							vo.lq2 = parseInt(vo.lq2) + parseInt(dp.getItemAt(i).c);
+						} 
+
+					}
+					
+					//年终总结
+					if (dp.getItemAt(i).typeId == 4) {
+						if (dp.getItemAt(i).statusId < 3) {
+							vo.ly1 = parseInt(vo.ly1) + parseInt(dp.getItemAt(i).c);
+						} 
+						
+						if (dp.getItemAt(i).statusId == 3) {
+							vo.ly2 = parseInt(vo.ly2) + parseInt(dp.getItemAt(i).c);
+//							vo.ly2 = dp.getItemAt(i).c;
+						} 
+
+					}	
+					
+					//党课
+					if (dp.getItemAt(i).typeId == 5) {
+						if (dp.getItemAt(i).statusId < 3) {
+							vo.dk1 = parseInt(vo.dk1) + parseInt(dp.getItemAt(i).c);
+						} 
+						
+						if (dp.getItemAt(i).statusId == 3) {
+							vo.dk2 = parseInt(vo.dk2) + parseInt(dp.getItemAt(i).c);
+						}
+					}
+					
+					//党员大会
+					if (dp.getItemAt(i).typeId == 6) {
+						if (dp.getItemAt(i).statusId < 3) {
+							vo.dydh1 = parseInt(vo.dydh1) + parseInt(dp.getItemAt(i).c);
+						} 
+						
+						if (dp.getItemAt(i).statusId == 3) {
+							vo.dydh2 = parseInt(vo.dydh2) + parseInt(dp.getItemAt(i).c);
+						}
+					}	
+					
+					//支部民主生活会
+					if (dp.getItemAt(i).typeId == 7) {
+						if (dp.getItemAt(i).statusId < 3) {
+							vo.mzshh1 = parseInt(vo.mzshh1) + parseInt(dp.getItemAt(i).c);
+						} 
+						
+						if (dp.getItemAt(i).statusId == 3) {
+							vo.mzshh2 = parseInt(vo.mzshh2) + parseInt(dp.getItemAt(i).c);
+						}
+					}	
+					
+					//支部委员会
+					if (dp.getItemAt(i).typeId == 8) {
+						if (dp.getItemAt(i).statusId < 3) {
+							vo.zbwyh1 = parseInt(vo.zbwyh1) + parseInt(dp.getItemAt(i).c);
+						} 
+						
+						if (dp.getItemAt(i).statusId == 3) {
+							vo.zbwyh2 = parseInt(vo.zbwyh2) + parseInt(dp.getItemAt(i).c);
+						}
+					}					
+					
+					if ( (i+1) == dp.length) {
+						datas.addItem(vo);
+					}
+					
+				}
+
+				remindDg.dataProvider = datas;
+				
+				remindDg.addEventListener(TextEvent.LINK, onEventTextLink, false , 0, true);
+			
+			}
+			
+			public function initObjectForAdmin():Object {
+				var vo:Object = new Object();
+				vo.y1 = 0;
+				vo.y2 = 0;
+				vo.y3 = 0;
+				vo.lq1 = 0;
+				vo.lq2 = 0;
+				vo.ly1 = 0;
+				vo.ly2 = 0;
+				vo.q1 = 0;
+				vo.q2 = 0;
+				vo.dk1 = 0;
+				vo.dk2 = 0;
+				vo.dydh1 = 0;
+				vo.dydh2 = 0;
+				vo.zbwyh1 = 0;
+				vo.zbwyh2 = 0;
+				vo.mzshh1 = 0;
+				vo.mzshh2 = 0;
+				return vo;
+			}
+			
+			public function initColumnsForNoCommit(typeId:Number):void {
+				
+				var year:Number = c_y;
+				var q:Number = c_q;
+				
+				var dateGridColumnArray :Array = new Array();
+				
+				var d:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				d.dataField = "parentName";
+				d.headerText = "上级党委";
+				//c1.wordWrap = true;
+				d.width = 200;
+				dateGridColumnArray.push(d);				
+				
+				var c:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c.dataField = "name";
+				c.headerText = "支部名称";
+				//c1.wordWrap = true;
+				c.width = 200;
+				dateGridColumnArray.push(c);
+				
+				
+				var c1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c1.dataField = "year";
+				c1.headerText = "年度";
+				//c1.wordWrap = true;
+				
+				dateGridColumnArray.push(c1);
+								
+				if (typeId !=1 && typeId !=4) {
+					var c2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+					c2.dataField = "quarter";
+					c2.headerText = "季度";
+					//c1.wordWrap = true;
+					dateGridColumnArray.push(c2);
+				}
+				
+				if (typeId == 8) {
+					var c_m:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+					c_m.dataField = "month";
+					c_m.headerText = "月份";
+					c_m.itemRenderer = new ClassFactory(com.partycommittee.renderers.CurrentMonthRenderer);
+					//c1.wordWrap = true;
+					dateGridColumnArray.push(c_m);
+				}
+				
+				var c3:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c3.dataField = "statusId";
+
+				c3.headerText =  WorkPlanCodeUtil.getWorkPlanTypeDes(typeId);
+				c3.itemRenderer = new ClassFactory(com.partycommittee.renderers.WpStatusRenderer);
+				dateGridColumnArray.push(c3);
+				
+				detailDg.columns = dateGridColumnArray;
+			}	
+			
+			public function initColumnsForCommit(typeId:Number):void {
+				
+				var year:Number = c_y;
+				var q:Number = c_q;
+				
+				var dateGridColumnArray :Array = new Array();
+				
+				var d:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				d.dataField = "parentName";
+				d.headerText = "上级党委";
+				//c1.wordWrap = true;
+				d.width = 200;
+				dateGridColumnArray.push(d);					
+				
+				var c:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c.dataField = "name";
+				c.headerText = "支部名称";
+				//c1.wordWrap = true;
+				c.width = 200;
+				dateGridColumnArray.push(c);
+				
+				
+				var c1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c1.dataField = "year";
+				c1.headerText = "年度";
+				//c1.wordWrap = true;
+				
+				dateGridColumnArray.push(c1);
+				
+				if (typeId !=1 && typeId !=4) {
+					var c2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+					c2.dataField = "quarter";
+					c2.headerText = "季度";
+					//c1.wordWrap = true;
+					dateGridColumnArray.push(c2);
+				}
+				
+				var c3:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c3.dataField = "statusId";
+				
+				c3.headerText =  WorkPlanCodeUtil.getWorkPlanTypeDes(typeId);
+				c3.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatusRenderer);
+				dateGridColumnArray.push(c3);
+				
+				detailDg.columns = dateGridColumnArray;
+			}			
+			
+			public function initColumnsForAdmin():void {
+
+				var year:Number = c_y;
+				var q:Number = c_q;
+
+				var dateGridColumnArray :Array = new Array();
+				var c1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c1.dataField = "name";
+				c1.headerText = "支部名称";
+				//c1.wordWrap = true;
+				c1.width = 160;
+				dateGridColumnArray.push(c1);
+
+				// 年度计划
+				var c_y:AdvancedDataGridColumnGroup = new AdvancedDataGridColumnGroup();
+				c_y.headerText = String(year) + "年度计划";
+				
+				
+				var c_y_ChildArray:Array = new Array();
+				var c_y_1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_y_1.dataField = "y1";
+				c_y_1.headerText = "未报";
+//				c_y_1.width = 60;
+				c_y_1.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				
+				c_y_ChildArray.push(c_y_1);
+				
+				var c_y_2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_y_2.dataField = "y2";
+				c_y_2.headerText = "未评";
+//				c_y_2.width = 60;
+				c_y_2.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_y_ChildArray.push(c_y_2);
+
+				c_y.children = c_y_ChildArray;
+					
+				dateGridColumnArray.push(c_y);
+
+				if (q == 1) {
+
+					// 去年第四季度执行情况
+					var c_last_q:AdvancedDataGridColumnGroup = new AdvancedDataGridColumnGroup();
+					c_last_q.headerText =String(year - 1) + "第4季度执行情况";
+					
+					
+					var c_last_q_ChildArray:Array = new Array();
+					var c_last_q_1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+					c_last_q_1.dataField = "lq1";
+					c_last_q_1.headerText = "未报";
+//					c_last_q_1.width = 80;
+					c_last_q_1.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+					c_last_q_ChildArray.push(c_last_q_1);
+					
+					var c_last_q_2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+					c_last_q_2.dataField = "lq2";
+					c_last_q_2.headerText = "未评";
+//					c_last_q_2.width = 80;
+					c_last_q_2.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+					c_last_q_ChildArray.push(c_last_q_2);
+
+					c_last_q.children = c_last_q_ChildArray;
+					
+					dateGridColumnArray.push(c_last_q);
+					
+					
+					//去年年终工作总结
+					var c_last_y:AdvancedDataGridColumnGroup = new AdvancedDataGridColumnGroup();
+					c_last_y.headerText =String(year - 1)+"年终工作总结";
+					
+					
+					var c_last_y_ChildArray:Array = new Array();
+					var c_last_y_1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+					c_last_y_1.dataField = "ly1";
+					c_last_y_1.headerText = "未报";
+//					c_last_y_1.width = 80;
+					c_last_y_1.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+					c_last_y_ChildArray.push(c_last_y_1);
+					
+					var c_last_y_2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+					c_last_y_2.dataField = "ly2";
+					c_last_y_2.headerText = "未评";
+//					c_last_y_2.width = 80;
+					c_last_y_2.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+					c_last_y_ChildArray.push(c_last_y_2);
+
+					c_last_y.children = c_last_y_ChildArray;
+					
+					dateGridColumnArray.push(c_last_y);					
+					
+				} else {
+					
+					// 上季度执行情况
+					var c_last_q:AdvancedDataGridColumnGroup = new AdvancedDataGridColumnGroup();
+					c_last_q.headerText = "第" + String(q -1 ) +"季度执行情况";
+					
+					
+					var c_last_q_ChildArray:Array = new Array();
+					var c_last_q_1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+					c_last_q_1.dataField = "lq1";
+					c_last_q_1.headerText = "未报";
+//					c_last_q_1.width = 80;
+					c_last_q_1.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+					c_last_q_ChildArray.push(c_last_q_1);
+					
+					var c_last_q_2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+					c_last_q_2.dataField = "lq2";
+					c_last_q_2.headerText = "未评";
+//					c_last_q_2.width = 80;
+					c_last_q_2.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+					c_last_q_ChildArray.push(c_last_q_2);
+
+					c_last_q.children = c_last_q_ChildArray;
+					
+					dateGridColumnArray.push(c_last_q);					
+				}
+				
+				
+				//本季度工作安排
+				var c_q:AdvancedDataGridColumnGroup = new AdvancedDataGridColumnGroup();
+				c_q.headerText = "第" + String(q) +"季度工作安排";
+				
+				var c_q_ChildArray:Array = new Array();
+				var c_q_1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_q_1.dataField = "q1";
+				c_q_1.headerText = "未报";
+//				c_q_1.width = 70;
+				c_q_1.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_q_ChildArray.push(c_q_1);
+				
+				var c_q_2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_q_2.dataField = "q2";
+				c_q_2.headerText = "未评";
+//				c_q_2.width = 70;
+				c_q_2.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_q_ChildArray.push(c_q_2);
+
+				c_q.children = c_q_ChildArray;
+				
+				dateGridColumnArray.push(c_q);						
+				
+				//党课
+				var c_dk:AdvancedDataGridColumnGroup = new AdvancedDataGridColumnGroup();
+				c_dk.headerText = "党课";
+				
+				var c_dk_ChildArray:Array = new Array();
+				var c_dk_1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_dk_1.dataField = "dk1";
+				c_dk_1.headerText = "未报";
+//				c_dk_1.width = 50;
+				c_dk_1.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_dk_ChildArray.push(c_dk_1);
+				
+				var c_dk_2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_dk_2.dataField = "dk2";
+				c_dk_2.headerText = "未评";
+//				c_dk_2.width = 50;
+				c_dk_2.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_dk_ChildArray.push(c_dk_2);
+			
+				
+				c_dk.children = c_dk_ChildArray;
+				
+				dateGridColumnArray.push(c_dk);	
+				
+				//党员大会
+				var c_dydh:AdvancedDataGridColumnGroup = new AdvancedDataGridColumnGroup();
+				c_dydh.headerText = "党员大会";
+				
+				var c_dydh_ChildArray:Array = new Array();
+				var c_dydh_1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_dydh_1.dataField = "dydh1";
+				c_dydh_1.headerText = "未报";
+//				c_dydh_1.width = 50;
+				c_dydh_1.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_dydh_ChildArray.push(c_dydh_1);
+				
+				var c_dydh_2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_dydh_2.dataField = "dydh2";
+				c_dydh_2.headerText = "未评";
+//				c_dydh_2.width = 50;
+				c_dydh_2.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_dydh_ChildArray.push(c_dydh_2);
+			
+				
+				c_dydh.children = c_dydh_ChildArray;
+				
+				dateGridColumnArray.push(c_dydh);					
+				
+				
+				//民主生活会，
+				var c_mzshh:AdvancedDataGridColumnGroup = new AdvancedDataGridColumnGroup();
+				c_mzshh.headerText = "民主生活会";
+				
+				var c_mzshh_ChildArray:Array = new Array();
+				var c_mzshh_1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_mzshh_1.dataField = "mzshh1";
+				c_mzshh_1.headerText = "未报";
+//				c_mzshh_1.width = 50;
+				c_mzshh_1.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_mzshh_ChildArray.push(c_mzshh_1);	
+				
+				var c_mzshh_2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_mzshh_2.dataField = "mzshh1";
+				c_mzshh_2.headerText = "未评";
+//				c_mzshh_1.width = 50;
+				c_mzshh_2.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_mzshh_ChildArray.push(c_mzshh_2);					
+				
+				
+				dateGridColumnArray.push(c_mzshh);	
+				//支部委员会，
+				var c_zbwyh:AdvancedDataGridColumnGroup = new AdvancedDataGridColumnGroup();
+				c_zbwyh.headerText = "支部委员会";
+				
+				var c_zbwyh_ChildArray:Array = new Array();
+				var c_zbwyh_1:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_zbwyh_1.dataField = "zbwyh1";
+				c_zbwyh_1.headerText = "未报";
+//				c_zbwyh_1.width = 50;
+				c_zbwyh_1.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_zbwyh_ChildArray.push(c_zbwyh_1);
+				
+				var c_zbwyh_2:AdvancedDataGridColumn = new AdvancedDataGridColumn();
+				c_zbwyh_2.dataField = "zbwyh2";
+				c_zbwyh_2.headerText = "未评";
+//				c_zbwyh_2.width = 50;
+				c_zbwyh_2.itemRenderer = new ClassFactory(com.partycommittee.renderers.RemindStatRenderer);
+				c_zbwyh_ChildArray.push(c_zbwyh_2);
+		
+				
+				c_zbwyh.children = c_zbwyh_ChildArray;
+				
+				dateGridColumnArray.push(c_zbwyh);					
+
+				c_mzshh.children = c_mzshh_ChildArray;
+				
+				
+
+				remindDg.groupedColumns = 		dateGridColumnArray;			
+				
+			}
+
+			private function getQuarter():Number {
+				var month:Number = new Date().getMonth() + 1;
+				if (month <= 3) {
+					return 1;
+				} else if (month <= 6) {
+					return 2;
+				} else if (month <= 9) {
+					return 3;
+				} else {
+					return 4;
+				}
+			}
+			
+			protected function onEventTextLink(event:TextEvent):void {
+				
+				var eventText:String = event.text;
+				if (eventText == 'nowp') {
+					var item:Object = dg.selectedItem;
+					if (this.parent.parent.parent.parent is MainContainer) {
+						var obj:Object = this.parent.parent.parent.parent as MainContainer;
+						(obj.mainViewStack as ViewStack).selectedIndex = 2;
+						var nobj:Object = (obj.mainViewStack as ViewStack).getChildByName('activityView');
+
+						var typeId:Number;
+						if (item is PcWorkPlanVo) {
+							typeId = (item as PcWorkPlanVo).typeId;
+						} else if (item is PcMeetingVo) {
+							typeId = (item as PcMeetingVo).typeId;
+						} else {
+							typeId = item.typeId;
+						}
+						switch (typeId) {
+							case PCConst.WORKPLAN_TYPE_YEARLY:
+								nobj.toIndex = 0;
+								break;
+							case PCConst.WORKPLAN_TYPE_YEARLY_SUMMARY:
+								nobj.toIndex = 8;
+								break;
+							case PCConst.WORKPLAN_TYPE_QUARTER:
+								nobj.toIndex = 1;
+								break;
+							case PCConst.WORKPLAN_TYPE_QUARTER_SUMMARY:
+								nobj.toIndex = 2;
+								break;
+							case PCConst.WORKPLAN_TYPE_CLASS:
+								nobj.toIndex = 3;
+								break;
+							case PCConst.WORKPLAN_TYPE_MEETING_BRANCH_COMMITTEE:
+								nobj.toIndex = 5;
+								break;
+							case PCConst.WORKPLAN_TYPE_MEETING_BRANCH_MEMBER:
+								nobj.toIndex = 4;
+								break;
+							case PCConst.WORKPLAN_TYPE_MEETING_BRANCH_LIFE:
+								nobj.toIndex = 6;
+								break;
+							case PCConst.WORKPLAN_TYPE_MEETING_OTHER:
+								nobj.toIndex = 7;
+								break;
+						}
+						
+
+											
+					}
+				}
+				
+				if (eventText.indexOf('getRemindList') >= 0 ) {
+					var textAry:Array = new Array();
+					textAry = eventText.split('&');
+					var tId:Number = textAry[1];
+					var sId:Number = textAry[2];
+					var aId:Number = textAry[3];
+					
+
+					if (sId < 2) {
+						var evt:PcRemindEvent = new PcRemindEvent(PcRemindEvent.GET_REMIND_NOCOMMIT_BY_PARENTID);
+						evt.agencyId = aId;
+						evt.typeId = tId;
+						evt.year = c_y;
+						if (tId == 1 || tId == 4) {
+							evt.quarter = 0;
+						} else {
+							evt.quarter = c_q;
+						}
+						
+						if (c_q == 1) {
+							if (tId == 3) {
+								evt.year = c_y - 1;
+								evt.quarter = 4;
+							} else if (tId == 4) {
+								evt.year = c_y - 1;
+							}
+						} else {
+							if (tId == 3) {
+								evt.quarter = c_q - 1;
+							}
+						}
+												
+						evt.successCallback = onGetRemindNoCommitSuccess;
+						evt.failureCallback = onGetRemindNoCommitFailure;
+						this.enabled = false;
+						evt.dispatch();
+					} else {
+						var evt:PcRemindEvent = new PcRemindEvent(PcRemindEvent.GET_REMIND_BY_PARENTID);
+						evt.agencyId = aId;
+						evt.typeId = tId;
+						evt.year = c_y;
+						if (tId == 1 || tId == 4) {
+							evt.quarter = 0;
+						} else {
+							evt.quarter = c_q;
+						}	
+						
+						if (c_q == 1) {
+							if (tId == 3) {
+								evt.year = c_y - 1;
+								evt.quarter = 4;
+							} else if (tId == 4) {
+								evt.year = c_y - 1;
+							}
+						} else {
+							if (tId == 3) {
+								evt.quarter = c_q - 1;
+							}
+						}					
+						
+						evt.statusId = sId;
+						evt.successCallback = onGetRemindCommitSuccess;
+						evt.failureCallback = onGetRemindCommitFailure;
+						this.enabled = false;
+						evt.dispatch();						
+					}
+				}
+				
+				if (eventText.indexOf('approval') >= 0 ) {
+					var textAry:Array = new Array();
+					textAry = eventText.split('&');	
+					var tId:Number = textAry[1];
+					var aId:Number = textAry[2];
+					
+					if (tId == 1) {
+						var agency:PcAgencyVo = new PcAgencyVo();
+						agency.id = aId;
+						
+						var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_WORKPLAN_YEARLY, agency);
+						workPlanEvt.year = c_y;
+						workPlanEvt.successCallback = onGetWorkPlanSuccess;
+						workPlanEvt.failureCallback = onGetWorkPlanFailure;
+						this.enabled = false;
+						workPlanEvt.dispatch();
+					}
+					
+				}
+			}			
+			
+			private function onGetRemindCommitSuccess(data:Object, evt:PcRemindEvent):void {
+				this.enabled = true;
+				if (!data) {
+					return;
+				}
+				
+				initColumnsForNoCommit(evt.typeId);
+				detailDg.dataProvider = data;
+				StatsViewStack.selectedChild = detail;
+			}
+			
+			private function onGetRemindCommitFailure(data:Object, workPlanEvt:PcRemindEvent):void {
+				this.enabled = true;
+			}					
+			
+			private function onGetRemindNoCommitSuccess(data:Object, evt:PcRemindEvent):void {
+				this.enabled = true;
+				if (!data) {
+					return;
+				}
+				
+				initColumnsForNoCommit(evt.typeId);
+				detailDg.dataProvider = data;
+				StatsViewStack.selectedChild = detail;
+			}
+			
+			private function onGetRemindNoCommitFailure(data:Object, workPlanEvt:PcRemindEvent):void {
+				this.enabled = true;
+			}				
+			
+			private function onGetWorkPlanSuccess(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				if (!data) {
+					return;
+				}
+				var workPlan:PcWorkPlanVo = data as PcWorkPlanVo;
+				if (!workPlan) {
+					return;
+				}
+				workPlan.workPlanContent = null;
+				var agency:PcAgencyVo = new PcAgencyVo();
+				agency.id = workPlan.agencyId;
+				var win:WorkPlanHandlerView = new WorkPlanHandlerView();
+				win.agency = agency;
+				win.workPlan = workPlan;
+				win.parentView = this;
+				win.type = PCConst.WORKFLOW_TYPE_APPROVAL;
+				PopupMgr.instance.popupWindow(win);				
+
+			}	
+			
+			private function onGetWorkPlanEvaSuccess(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				if (!data) {
+					return;
+				}
+				var workPlan:PcWorkPlanVo = data as PcWorkPlanVo;
+				if (!workPlan) {
+					return;
+				}
+				workPlan.workPlanContent = null;
+				var agency:PcAgencyVo = new PcAgencyVo();
+				agency.id = workPlan.agencyId;
+				var win:WorkPlanHandlerView = new WorkPlanHandlerView();
+				win.agency = agency;
+				win.workPlan = workPlan;
+				win.parentView = this;
+				win.type = PCConst.WORKFLOW_TYPE_EVALUATE;
+				PopupMgr.instance.popupWindow(win);
+			}				
+			
+
+			private function onGetWorkPlanFailure(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+			}		
+			
+			public function refreshData():void {
+				c_y = yearCmb.selectedItem as Number;
+				c_q = quarterCmb.selectedItem as Number;				
+				updateData();
+			}
+			
+			public function onViewStatckChange(event:Event):void {
+				if (dg) {
+					dg.addEventListener(TextEvent.LINK, onEventTextLink, false , 0, true);
+				}
+				
+				if (remindDg) {
+					remindDg.addEventListener(TextEvent.LINK, onEventTextLink, false , 0, true);
+				}				
+			}
+			
+
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<mx:VBox width="100%" height="100%">
+	<mx:HBox >
+		<mx:Label text="选择年份:"/>
+		<mx:ComboBox id="yearCmb"/>
+		<mx:Label text="季度:"/>
+		<mx:ComboBox id="quarterCmb" />
+		<mx:Button label="查看预警" click="refreshData()"/>
+	</mx:HBox>
+	<mx:ViewStack id="RemindViewStack" width="100%" height="100%"
+				  left="6" right="6" top="6" bottom="6" change="onViewStatckChange(event)">
+		<mx:VBox id="AGrid" width="100%" height="100%"
+				 left="6" right="6" top="6" bottom="6"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off" >
+			<mx:AdvancedDataGrid id="dg" dataProvider="{dp}" width="100%" height="100%">
+				<mx:columns>
+					<mx:AdvancedDataGridColumn headerText="内容" dataField="typeId"
+											   labelFunction="{LblFunctionHelper.workPlanTypeLblFunc}"/>
+					<mx:AdvancedDataGridColumn headerText="年度" dataField="year"/>
+					<mx:AdvancedDataGridColumn headerText="季度" dataField="quarter"/>
+					<mx:AdvancedDataGridColumn headerText="状态" dataField="data"
+						itemRenderer="com.partycommittee.renderers.WpStatusRenderer"/>
+					<mx:AdvancedDataGridColumn headerText="填报时限" dataField="data"
+					    itemRenderer="com.partycommittee.renderers.RemindDescriptRenderer"/>
+				</mx:columns>
+			</mx:AdvancedDataGrid>
+		</mx:VBox>
+		<mx:VBox id="MecGrid" width="100%" height="100%"
+				 left="6" right="6" top="6" bottom="6"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:ViewStack id="StatsViewStack" width="100%" height="100%" creationPolicy="all"
+						  left="6" right="6" top="6" bottom="6">
+				<mx:VBox id="stats" width="100%" height="100%"
+						 left="6" right="6" top="6" bottom="6"
+						 horizontalScrollPolicy="auto" verticalScrollPolicy="auto">		
+
+					<mx:AdvancedDataGrid id="remindDg" 
+										 width="100%" height="100%" 
+										 headerSortSeparatorSkin="mx.skins.ProgrammaticSkin"										
+										 lockedColumnCount="1"
+										 headerStyleName="centerAligned"
+										 sortableColumns="false" sortExpertMode="true"
+										 variableRowHeight="true"
+										 minWidth="640" minHeight="480" headerWordWrap="true"   />
+				</mx:VBox>
+				
+				<mx:VBox id="detail" width="100%" height="100%"
+						 left="6" right="6" top="6" bottom="6"
+						 horizontalScrollPolicy="auto" verticalScrollPolicy="auto">				
+					<mx:Button icon="@Embed('/assets/images/icon_arrowleft.png')"  click="{StatsViewStack.selectedChild = stats}" toolTip="返回" />
+					<mx:AdvancedDataGrid id="detailDg" 
+										 width="100%" height="100%" 
+										 variableRowHeight="true"
+										 headerSortSeparatorSkin="mx.skins.ProgrammaticSkin"
+										 horizontalScrollPolicy="on"
+										 lockedColumnCount="1"
+										 headerStyleName="centerAligned"
+										 sortableColumns="false"/>
+				</mx:VBox>				
+				
+			</mx:ViewStack>	
+		</mx:VBox>
+	</mx:ViewStack>
+	</mx:VBox>
+</navigation:NavigationView>

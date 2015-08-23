@@ -1,0 +1,99 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						   xmlns:s="library://ns.adobe.com/flex/spark" 
+						   xmlns:mx="library://ns.adobe.com/flex/mx"
+						   styleName="mainCanvas"
+						   width="100%" height="100%" 
+						   creationComplete="onCreationCompleted()"
+						   xmlns:navigation="com.partycommittee.manager.navigation.*"
+						   xmlns:stats="com.partycommittee.views.stats.*"
+						   >
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.views.MainContainer;
+			
+			import mx.events.PropertyChangeEvent;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			private var _toIndex:int;
+			
+			public function get toIndex():int
+			{
+				return _toIndex;
+			}
+			
+			public function set toIndex(value:int):void
+			{
+				_toIndex = value;
+			}
+			
+			private function onCreationCompleted():void {
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+
+				if (model.isLeafUser) {
+					StatViewStack.selectedChild = PtStat;
+				} else {
+					StatViewStack.selectedChild = ManagerStat;
+				}
+			
+				
+
+			}
+			
+			private function onPropertyChanged(event:PropertyChangeEvent):void {
+				if (event.property == "isLeafUser") {
+					model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+					if (model.isLeafUser) {
+						StatViewStack.selectedChild = PtStat;
+						
+					} 
+				} else if (event.property == "focusAgencyVo") {
+					if (model.focusAgencyVo.codeId == 10) {
+						StatViewStack.selectedChild = PtStat;
+					} else {
+						StatViewStack.selectedChild = ManagerStat;
+					}
+					
+				}
+			}			
+			
+			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<mx:ViewStack id="StatViewStack" width="100%" height="100%"
+				  left="6" right="6" top="6" bottom="6" change="onViewStatckChange(event)">
+		<mx:VBox id="ManagerStat" width="100%" height="100%"
+		left="6" right="6" top="6" bottom="6"
+		horizontalScrollPolicy="off" verticalScrollPolicy="off" >
+			
+			<mx:TabNavigator id="tab1" width="100%" height="100%" >
+				<stats:AgencyStatView id="agencyStatView" width="100%" height="100%" 
+									  label="基本情况统计表" tab="{this.tab}"/>
+				<stats:WorkPlanStatView id="workPlanStatView" width="100%" height="100%" 
+										label="工作计划统计表" tab="{this.tab}"/>
+				<stats:MeetingStatView id="meetingStatView" width="100%" height="100%" 
+									   label="组织会议统计表" tab="{this.tab}"/>		
+			</mx:TabNavigator>
+		</mx:VBox>
+		
+		<mx:VBox id="PtStat" width="100%" height="100%"
+				 left="6" right="6" top="6" bottom="6"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off" >
+			
+			<mx:TabNavigator id="tab2" width="100%" height="100%" >
+				<stats:ZbStatView id="zbStatView" width="100%" height="100%" 
+								  label="组织生活统计表" tab="{this.tab}"/>		
+				<stats:PrintToWordView id="printToWordView" width="100%" height="100%" 
+									   label="打印工作手册" tab="{this.tab}"/>			
+			</mx:TabNavigator>
+		</mx:VBox>		
+	</mx:ViewStack>
+	
+</navigation:NavigationView>

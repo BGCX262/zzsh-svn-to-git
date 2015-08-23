@@ -1,0 +1,850 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  height="650" width="800"
+					  creationComplete="onCreationCompleted()"
+					  xmlns:button="com.partycommittee.control.button.*" 
+					  xmlns:richtexttoolbar="com.partycommittee.control.richtexttoolbar.*" 
+					  xmlns:component="com.partycommittee.views.agencymgmt.agencyactivity.workplan.component.*">
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.events.PcAgencyEvent;
+			import com.partycommittee.events.PcMeetingEvent;
+			import com.partycommittee.events.PcMemberEvent;
+			import com.partycommittee.events.PcRemindLockEvent;
+			import com.partycommittee.events.PcWordEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.DateUtil;
+			import com.partycommittee.util.WorkPlanCodeUtil;
+			import com.partycommittee.util.WorkPlanStatusUtil;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.component.ReturnFormWindow;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcMeetingContentVo;
+			import com.partycommittee.vo.PcMeetingVo;
+			import com.partycommittee.vo.PcRemindConfigVo;
+			import com.partycommittee.vo.PcRemindLockVo;
+			import com.partycommittee.vo.PcWorkPlanVo;
+			
+			import flashx.textLayout.debug.assert;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			
+			[Bindable]
+			private var workPlanStatusLbl:String;
+			
+			private var isNew:Boolean = true;
+			
+			[Bindable]
+			private var isCustom:Boolean = false;
+			
+			[Bindable]
+			public var detailMode:Boolean = false;
+			
+			[Bindable]
+			private var year:Number = DateUtilExt.now().getFullYear();
+			
+			private var _meetingType:Number;
+			[Bindable]
+			public function get meetingType():Number {
+				return this._meetingType;
+			}
+			public function set meetingType(value:Number):void {
+				this._meetingType = value;
+			}
+			
+			private var _meeting:PcMeetingVo;
+			[Bindable]
+			public function get meeting():PcMeetingVo {
+				return this._meeting;
+			}
+			public function set meeting(value:PcMeetingVo):void {
+				this._meeting = value;
+			}
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			private var _parentView:MeetingListView;
+			[Bindable]
+			public function get parentView():MeetingListView {
+				return this._parentView;
+			}
+			public function set parentView(value:MeetingListView):void {
+				this._parentView = value;
+			}
+			
+			private function onCreationCompleted():void {
+				updateData();
+			}
+			
+			private function updateData():void {
+				if (!agency) {
+					return;
+				}
+				
+				switch (meetingType) {
+					case PCConst.WORKPLAN_TYPE_CLASS:
+						title = "党课";
+						break;
+					case PCConst.WORKPLAN_TYPE_MEETING_BRANCH_COMMITTEE:
+						title = "支部委员会";
+						break;
+					case PCConst.WORKPLAN_TYPE_MEETING_BRANCH_LIFE:
+						title = "支部生活会";
+						break;
+					case PCConst.WORKPLAN_TYPE_MEETING_BRANCH_MEMBER:
+						title = "支部党员大会";
+						break;
+					case PCConst.WORKPLAN_TYPE_MEETING_OTHER:
+						title = "其他";
+						break;
+//					case PCConst.WORKPLAN_TYPE_MEETING_TEAM:
+//						break;
+				}
+								
+				if (meetingType == PCConst.WORKPLAN_TYPE_MEETING_OTHER) {
+					meetingTitleBox.visible = meetingTitleBox.includeInLayout = false;
+					otherMeetingTitleBox.visible = otherMeetingTitleBox.includeInLayout = true;
+				} else {
+					meetingTitleBox.visible = meetingTitleBox.includeInLayout = true;
+					otherMeetingTitleBox.visible = otherMeetingTitleBox.includeInLayout = false;
+				}
+				
+				if (meeting && meeting.id) {
+					isNew = false;
+					workPlanStatusLbl = WorkPlanStatusUtil.getWorkPlanStatusDes(meeting.statusId);
+					if (workPlanStatusLbl != "") {
+						workPlanStatusLbl = " (" + workPlanStatusLbl + ")";
+					}
+					year = meeting.year;
+					meetingNameTxt.text = meeting.meetingName;
+					dateField.selectedDate = meeting.meetingDatetime;
+					themeTxt.text = meeting.theme;
+					attendTxt.text = meeting.attend + "";
+					asenceTxt.text = meeting.asence + "";
+					asenceMembersTxt.text = meeting.asenceMemberIds;
+					moderatorTxt.text = meeting.moderator;
+					if (meeting.statusId < 3) {
+						meetingViewStack.selectedChild = reportForm;
+						if (meeting.content) {
+							personTxt.text = meeting.content.memberName;
+							textArea.htmlText = meeting.content.content;
+							
+						} else {
+							loadMeetingContent();
+						}
+						
+					} else {
+						meetingViewStack.selectedChild = browseForm;
+						if (meeting.content) {
+							b_personTxt.text = '填写人：' + meeting.content.memberName;
+							b_textArea.htmlText = meeting.content.content;
+							if (meeting.statusId >= 4) {
+								getEvaluateInfo();
+							}							
+						} else {
+							loadMeetingContent();
+						}						
+					}
+				} else {
+					isNew = true;
+					meetingViewStack.selectedChild = reportForm;
+					if (!meeting) {
+						isCustom = true;
+					}
+					
+					if (meetingType == PCConst.WORKPLAN_TYPE_MEETING_BRANCH_COMMITTEE) {
+						getAgencyAttend();
+					} else {
+						attendTxt.text = agency.zbnum.toString();						
+					}
+
+					
+				}
+				
+				timeChange();
+			}
+			
+			private function getAgencyAttend():void {
+				var memberEvent:PcMemberEvent = new PcMemberEvent(PcMemberEvent.GET_WY_COUNT_BY_AGENCYID, 
+					null, agency.id);
+				memberEvent.successCallback = onWyCountSuccess;
+				memberEvent.failureCallback = onWyCountFailure;
+				memberEvent.dispatch();
+			}
+			
+			private function onWyCountSuccess(data:Object, evt:PcMemberEvent):void {
+				attendTxt.text = data.toString();		
+			}			
+			
+			private function onWyCountFailure(info:Object, evt:PcMemberEvent):void {
+
+			}				
+			
+			
+			private function loadMeetingContent():void {
+				var evt:PcMeetingEvent = new PcMeetingEvent(PcMeetingEvent.GET_CONTENT_INFO);
+				evt.meeting = meeting;
+				evt.meetingType = 1;
+				evt.successCallback = onLoadContentSuccess;
+				evt.failureCallback = onLoadContentFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function onLoadContentSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				meeting.content = data as PcMeetingContentVo;
+				if (meetingViewStack.selectedChild == reportForm) {
+					personTxt.text = meeting.content.memberName;
+					textArea.htmlText = meeting.content.content;
+				}
+				if (meetingViewStack.selectedChild == browseForm) {
+					b_personTxt.text = '填写人：' + meeting.content.memberName;
+					b_textArea.htmlText = meeting.content.content;
+				}
+				
+				if (meeting.statusId >= 3) {
+					dateTxt.text = "日期：" + DateUtil.toISOString(meeting.content.updatetime, false);
+				} 
+				
+				if (meeting.statusId >= 4) {
+					getEvaluateInfo();
+				}					
+			}
+			
+			private function onLoadContentFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show("读取会议内容失败！");
+			}			
+
+			private function getEvaluateInfo():void {
+				var meetingEvt:PcMeetingEvent = new PcMeetingEvent(PcMeetingEvent.GET_CONTENT_INFO);
+				meetingEvt.meeting = meeting;
+				meetingEvt.meetingType = 3;
+				meetingEvt.successCallback = onGetEvaluateInfoSuccess;
+				meetingEvt.failureCallback = onGetEvaluateInfoFailure;
+				this.enabled = false;
+				meetingEvt.dispatch();
+			}
+			
+			private function onGetEvaluateInfoSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				var meetingContent:PcMeetingContentVo = data as PcMeetingContentVo;
+				if (!meetingContent) {
+					return;
+				}
+				browseForm_evaluate.percentWidth = 100;
+				browseForm_evaluate.percentHeight = 40;	
+				browseForm_evaluate.visible = true;
+				b_textArea_eva.htmlText = meetingContent.content;
+				b_personTxt_eva.text = "评语主体：" + meetingContent.memberName;
+				dateTxt_eva.text = "日期：" + DateUtil.toISOString(meetingContent.updatetime, false);
+				
+				if (meeting.statusId == 5) {
+					getRateInfo();
+				}				
+			}
+			
+			private function onGetEvaluateInfoFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show("获取内容失败！");
+			}	
+			
+			private function getRateInfo():void {
+				var evt:PcMeetingEvent = new PcMeetingEvent(PcMeetingEvent.GET_CONTENT_INFO);
+				evt.meeting = meeting;
+				evt.meetingType = 4;
+				evt.successCallback = onGetRateInfoSuccess;
+				evt.failureCallback = onGetRateInfoFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function onGetRateInfoSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				if (data as PcMeetingContentVo) {
+					rate_box.percentWidth = 100;
+					rate_box.percentHeight = 10;
+					var contentVo:PcMeetingContentVo = data as PcMeetingContentVo;
+					this.ratePersonTxt.text = "评价主体：" + contentVo.memberName;
+					//this.rateTextArea.htmlText = contentVo.content;
+					rateGroup.selectedValue = contentVo.content;
+					dateTxt_rate.text = "日期：" + DateUtil.toISOString(contentVo.updatetime);
+					rate_box.visible = true;
+				}
+			}
+			
+			private function onGetRateInfoFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+			}			
+						
+			private function onGetYearWorkPlanFailure():void {
+				this.enabled = true;
+			}
+			
+			private function formValidate():Boolean {
+				if (!dateField.selectedDate) {
+					Alert.show("时间不能为空!");
+					return false;
+				}
+				
+				var model:ModelLocator = ModelLocator.getInstance();
+				if (dateField.selectedDate.getFullYear() != model.reportYear) {
+					Alert.show("年份选择不正确!");
+					return false;					
+				}
+
+				if (moderatorTxt.text.length == 0) {
+					Alert.show("主持人不能为空!");
+					return false;
+				}				
+				
+				if (themeTxt.text.length == 0) {
+					Alert.show("主题不能为空!");
+					return false;
+				}	
+			
+				if (attendTxt.text.length == 0) {
+					Alert.show("应到人数不能为空!");
+					return false;
+				}
+			
+				if (asenceTxt.text.length > 0 && Number(asenceTxt.text) > 0) {
+					if (asenceMembersTxt.text.length == 0) {
+						Alert.show("缺席人名单不能为空!");
+						return false;
+					} 
+					
+					if (  Number(asenceTxt.text) >= Number(attendTxt.text)/2 ) {
+						Alert.show("出席人数未到应到人数的1/2，请确认缺席人数及缺席人员名单");
+						return false;
+					}
+				}			
+				
+				if (textArea.htmlText.length == 0) {
+					Alert.show("会议内容不能为空!");
+					return false;					
+				}
+				
+				if (personTxt.text.length == 0) {
+					Alert.show("填写人不能为空!");
+					return false;
+				}
+								
+			
+				return true;
+			}			
+			
+			private function onSaveAndCommit():void {
+				if (formValidate() == true) {	
+					if (!isNew) {
+						doUpdate(true);
+					} else {
+						doCreate(true);
+					}
+				}
+			}
+			
+			private function onSaveWithoutSubmit():void {
+				if (formValidate() == true) {	
+					if (!isNew) {
+						doUpdate();
+					} else {
+						doCreate();
+					}
+				}
+			}
+			
+			private function doUpdate(isCommit:Boolean = false):void {
+				var meetingEvt:PcMeetingEvent = new PcMeetingEvent(CRUDEventType.UPDATE);
+				meeting = getUpdateMeeting();
+				
+				if (isCommit) {
+					meeting.statusId = 3;
+				} else if (meeting.statusId != 2) {
+					meeting.statusId = 1;
+				}
+				
+				meetingEvt.meeting = meeting;
+				meetingEvt.successCallback = onMeetingUpdateSuccess;
+				meetingEvt.failureCallback = onMeetingUpdateFailure;
+				this.enabled = false;
+				meetingEvt.dispatch();
+			}
+			
+			private function doCreate(isCommit:Boolean = false):void {
+				var meetingEvt:PcMeetingEvent = new PcMeetingEvent(CRUDEventType.CREATE);
+				var newMeeting:PcMeetingVo = getNewMeeting();
+				newMeeting.statusId = isCommit ? 3 : 1;
+				meetingEvt.meeting = newMeeting;
+				meetingEvt.successCallback = onMeetingCreateSuccess;
+				meetingEvt.failureCallback = onMeetingCreateFailure;
+				this.enabled = false;
+				meetingEvt.dispatch();
+			}
+			
+			private function onMeetingCreateSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				parentView.updateData();
+				this.close();
+			}
+			
+			private function onMeetingCreateFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show("保存会议内容失败！");
+			}
+			
+			private function onMeetingUpdateSuccess(data:Object, workPlanEvt:PcMeetingEvent):void {
+				this.enabled = true;
+				parentView.updateData();
+				this.close();
+			}
+			
+			private function onMeetingUpdateFailure(info:Object, workPlanEvt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show("修改会议内容失败！");
+			}
+			
+			private function getNewMeeting():PcMeetingVo {
+				var newMeeting:PcMeetingVo = new PcMeetingVo();
+				newMeeting.meetingName = meetingNameTxt.text;
+				newMeeting.typeId = meetingType;
+				newMeeting.year = dateField.selectedDate.getFullYear();
+				newMeeting.quarter = getQuarter(dateField.selectedDate.month + 1);
+				newMeeting.month = 0;
+				if (meetingType == PCConst.WORKPLAN_TYPE_MEETING_BRANCH_COMMITTEE ||
+					meetingType == PCConst.WORKPLAN_TYPE_MEETING_OTHER) {
+					newMeeting.month = dateField.selectedDate.month + 1;
+				}
+				newMeeting.agencyId = agency.id;
+				newMeeting.moderator = moderatorTxt.text;
+				newMeeting.theme = themeTxt.text;
+				newMeeting.attend = Number(attendTxt.text);
+				newMeeting.asence = Number(asenceTxt.text);
+				newMeeting.asenceMemberIds = asenceMembersTxt.text;
+				newMeeting.content = getMeetingContent();
+				newMeeting.meetingDatetime = dateField.selectedDate;
+				return newMeeting;
+			}
+			
+			private function getQuarter(month:Number):Number {
+				if (month <= 3) {
+					return 1;
+				} else if (month <= 6) {
+					return 2;
+				} else if (month <= 9) {
+					return 3;
+				} else {
+					return 4;
+				}
+			}			
+			
+			private function getUpdateMeeting():PcMeetingVo {
+				meeting.meetingName = meetingNameTxt.text;
+				meeting.meetingDatetime = dateField.selectedDate;
+				meeting.year = dateField.selectedDate.getFullYear();
+				meeting.quarter = getQuarter(dateField.selectedDate.month + 1);
+				meeting.month = 0;
+				if (meetingType == PCConst.WORKPLAN_TYPE_MEETING_BRANCH_COMMITTEE ||
+					meetingType == PCConst.WORKPLAN_TYPE_MEETING_OTHER) {
+					meeting.month = dateField.selectedDate.month + 1;
+				}
+				meeting.theme = themeTxt.text;
+				meeting.moderator = moderatorTxt.text;
+				meeting.attend = Number(attendTxt.text);
+				meeting.asence = Number(asenceTxt.text);
+				meeting.asenceMemberIds = asenceMembersTxt.text;
+				meeting.content.memberName = personTxt.text;
+				meeting.content.content = textArea.htmlText;
+				return meeting;
+			}
+			
+			private function getMeetingContent():PcMeetingContentVo {
+				var meetingContent:PcMeetingContentVo = new PcMeetingContentVo();
+				meetingContent.content = textArea.htmlText;
+				meetingContent.memberName = personTxt.text;
+				meetingContent.type = PCConst.WORKFLOW_TYPE_REPORT;
+				return meetingContent;
+			}
+
+			private function onBrowseEvaluate():void {
+				var commentView:CommentView = new CommentView();
+				commentView.meeting = meeting;
+				PopupMgr.instance.popupWindow(commentView);
+			}
+			
+			
+			private function initRemindLock():void {
+				btn_commit.enabled = true;
+				remindTxt.text = "";
+				remindTxt.visible = false;				
+				if (dateField.selectedDate) {
+					// 检查上报期限，分几种情况
+					//	1. 未到上报期限 -> 锁定
+					
+					var vo:PcRemindConfigVo = getRemindVo(meetingType);
+					var cur_date:Date = DateUtilExt.now();
+	
+					var c_year:Number = dateField.selectedDate.getFullYear();
+					var c_quarter:Number = getQuarter(dateField.selectedDate.month + 1);
+					var c_month:Number = 0;
+					if (meetingType == PCConst.WORKPLAN_TYPE_MEETING_BRANCH_COMMITTEE) {
+						c_month = dateField.selectedDate.month + 1;
+					}
+					
+					var startDate:Date;
+					var endDate:Date;
+					
+					if (meetingType != 8) { 
+						startDate = DateUtilExt.beginOfQuarter(c_year, c_quarter);
+						endDate = DateUtilExt.endOfQuarter(c_year, c_quarter);
+					} else if (meetingType == 8) {
+						startDate = DateUtilExt.beginOfMonth(dateField.selectedDate);
+						endDate = DateUtilExt.endOfMonth(dateField.selectedDate);
+					}
+//					Alert.show(endDate.toLocaleDateString());
+					if (DateUtilExt.before(cur_date, startDate)) {
+						btn_commit.enabled = false;
+						remindTxt.htmlText = "<font color='#ff0000'>说明:未到上报期限</font>";
+						remindTxt.visible = true;	
+					} else {
+						//	2. 已到上报期限 -> 打开
+						//	3. 已过上报期限 -> 锁定
+						//	4. 已过上报期限，解锁 -> 打开
+						//	5. 已过上报期限，并到延长时限 -> 锁定
+						
+						
+						//如果是驳回，暂不用检查时间
+						if (meeting && meeting.id) {
+							if (meeting.statusId == 2) return;
+						}
+						
+						var remindLockEvt:PcRemindLockEvent = new PcRemindLockEvent(PcRemindLockEvent.GET_REMIND_LOCK_BY_ID);
+						remindLockEvt.agencyId = agency.id;
+						remindLockEvt.year = c_year;
+						remindLockEvt.quarter = c_quarter;
+						if (meetingType == 8) {
+							remindLockEvt.month = c_month;
+							remindLockEvt.quarter = c_quarter;
+						} else {
+							remindLockEvt.month = 0;
+						}
+						remindLockEvt.typeId = meetingType;
+						remindLockEvt.successCallback = getRemindLockSuccess;
+						remindLockEvt.failureCallback = getRemindLockFailure
+						remindLockEvt.dispatch();
+					}
+				}
+			}				
+			
+			private function getRemindLockSuccess(data:Object, evt:PcRemindLockEvent):void {
+				// 检查上报期限，分几种情况
+				//	1. 未到上报期限 -> 锁定
+				//	2. 已到上报期限 -> 打开
+				//	3. 已过上报期限 -> 锁定
+				//	4. 已过上报期限，解锁 -> 打开
+				//	5. 已过上报期限，并到延长时限 -> 锁定
+				if (data) {
+					var lock_vo:PcRemindLockVo = data as PcRemindLockVo;
+					
+					var config_vo:PcRemindConfigVo = getRemindVo(meetingType);
+					var cur_date:Date = DateUtilExt.now();
+					
+					//	3. 已过上报期限 -> 锁定
+					if (lock_vo.statusId == 9) {
+//						var endDate:Date = DateUtilExt.beginOfQuarter(year, quarter);
+//						endDate = DateUtilExt.nextSomeDay(endDate, config_vo.endDay);
+//						if (DateUtilExt.after(cur_date, endDate)) {
+							btn_commit.enabled = false;
+							remindTxt.htmlText = "<font color='#ff0000'>说明:超过上报期限,已锁定</font>";
+							remindTxt.visible = true;
+//						}
+					} else if (lock_vo.statusId == 8) {
+						//	5. 已过上报期限，解锁后，并到延长时限 -> 锁定
+						if (lock_vo.delayDate && lock_vo.delayDate.length > 0) {
+							var delayDate:Date = new Date(lock_vo.delayDate);
+							if (DateUtilExt.after(cur_date, delayDate)) {
+								btn_commit.enabled = false;
+								remindTxt.htmlText = "<font color='#ff0000'>说明:超过上报期限,已锁定</font>";
+								remindTxt.visible = true;
+							}
+						}
+					} else {
+						checkAfterDate();
+					}
+				}
+				
+			}		
+			
+			private function checkAfterDate():void {
+				if (dateField.selectedDate) {
+					// 检查上报期限，分几种情况
+					//	1. 未到上报期限 -> 锁定
+					
+					var vo:PcRemindConfigVo = getRemindVo(meetingType);
+					var cur_date:Date = DateUtilExt.now();
+					
+					var c_year:Number = dateField.selectedDate.getFullYear();
+					var c_quarter:Number = getQuarter(dateField.selectedDate.month + 1);
+					var c_month:Number = 0;
+					if (meetingType == PCConst.WORKPLAN_TYPE_MEETING_BRANCH_COMMITTEE) {
+						c_month = dateField.selectedDate.month + 1;
+					}
+					
+					var startDate:Date;
+					var endDate:Date;
+					
+					if (meetingType != 8) { 
+						startDate = DateUtilExt.beginOfQuarter(c_year, c_quarter);
+						endDate = DateUtilExt.endOfQuarter(c_year, c_quarter);
+					} else if (meetingType == 8) {
+						startDate = DateUtilExt.beginOfMonth(dateField.selectedDate);
+						endDate = DateUtilExt.endOfMonth(dateField.selectedDate);
+						
+					}
+					if (vo.delayDay > 0) {
+						endDate = DateUtilExt.nextSomeDay(endDate, vo.delayDay);
+					}					
+					
+
+					//					Alert.show(endDate.toLocaleDateString());
+					if (DateUtilExt.after(cur_date, endDate)) {
+						btn_commit.enabled = false;
+						remindTxt.htmlText = "<font color='#ff0000'>说明:超过上报期限</font>";
+						remindTxt.visible = true;	
+					}
+				}
+			}			
+			
+			
+			private function getRemindLockFailure(data:Object, evt:PcRemindLockEvent):void {
+				btn_commit.enabled = true;
+				remindTxt.text = "";
+				remindTxt.visible = false;
+				checkAfterDate();
+			}	
+			
+			public function getRemindVo(typeId:Number):PcRemindConfigVo {
+				var model:ModelLocator = ModelLocator.getInstance();
+				var dd:ArrayCollection = model.remindConfigCollection;
+				for(var i = 0; i < dd.length; i++ ) {
+					if ( (dd.getItemAt(i) as PcRemindConfigVo).typeId == typeId) {
+						return dd.getItemAt(i) as PcRemindConfigVo
+					}
+				}
+				return null;
+			}		
+			
+			public function timeChange():void {
+				if (dateField.selectedDate) {
+					titleTxt.text = year + '年度第' + getQuarter(dateField.selectedDate.month + 1) + '季度' + title;
+				} else {
+					titleTxt.text = year + '年度第' + getQuarter(DateUtilExt.now().getMonth() + 1) + '季度' + title;
+				}
+				if (meeting && meeting.id) {
+					if (meeting.statusId < 3) {
+						initRemindLock();
+					}
+				} else {
+					initRemindLock();
+				}
+			}
+			
+			private function onGetReturnInfo():void {
+				var title:String = '驳回原因';
+				var win:ReturnFormWindow = new ReturnFormWindow();
+				win.title = title;
+				win.reportId = meeting.id;
+				win.type = 'meeting';
+				win.modelType = 'browse';
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+			private function onExportToDoc():void {
+				
+				var evt:PcWordEvent = new PcWordEvent(PcWordEvent.EXPORT_WORD_FOR_MEETING);
+				evt.zid = meeting.id;
+				evt.successCallback = onExportWordAllSuccess;
+				evt.failureCallback = onExportWordAllFailure;					
+				
+				evt.dispatch();
+			}
+			
+			private function onExportWordAllSuccess(data:Object, evt:PcWordEvent):void {
+				var filename = data as String;
+				
+				if (!filename) return;
+				
+				var url = "wordExport.jsp";				
+				var variables:URLVariables = new URLVariables();
+				var title:String = titleTxt.text;
+				variables.filename = filename;
+				variables.title = title;
+				var u:URLRequest = new URLRequest(url);   
+				u.data = variables;   
+				u.method = URLRequestMethod.GET;
+				navigateToURL(u,"_self");
+			}
+			
+			private function onExportWordAllFailure(info:Object, evt:PcWordEvent):void {
+				//				Alert.show("onExportWordAllFailure");
+			}	
+			
+				
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+		<s:RadioButtonGroup id="rateGroup" />  
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 left="6" right="6" top="6" bottom="6"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:HBox id="meetingTitleBox" width="100%" horizontalAlign="center"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label id="titleTxt" fontSize="20" fontWeight="bold" />
+			<mx:Label fontSize="20" fontWeight="bold"
+					  text="{workPlanStatusLbl}"/>
+		</mx:HBox>
+
+		<mx:HBox id="otherMeetingTitleBox" width="100%" horizontalAlign="center"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label text="会议名称:" width="75"/>
+			<mx:TextInput id="meetingNameTxt" width="100%"/>
+		</mx:HBox>
+		<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:HBox width="50%"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<mx:Label text="时    间:" width="75"/>
+				<mx:DateField id="dateField" width="100%" selectedDate="{DateUtilExt.now()}"
+							  formatString="YYYY-MM-DD" change="timeChange()"/>
+			</mx:HBox>
+			<mx:HBox width="50%"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<mx:Label text="主持人:" width="75"/>
+				<mx:TextInput id="moderatorTxt" width="100%"/>
+			</mx:HBox>
+		</mx:HBox>
+		<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label text="主    题:" width="75"/>
+			<mx:TextInput id="themeTxt" width="100%"/>
+		</mx:HBox>
+		<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:HBox width="50%"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<mx:Label text="应到人数:" width="75"/>
+				<mx:TextInput id="attendTxt" width="100%" restrict="0-9"/>
+			</mx:HBox>
+			<mx:HBox width="50%"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<mx:Label text="缺席人数:" width="75"/>
+				<mx:TextInput id="asenceTxt" width="100%" restrict="0-9"/>
+			</mx:HBox>
+		</mx:HBox>
+		<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label text="缺席人名单:" width="75"/>
+			<mx:TextInput id="asenceMembersTxt" width="100%"/>
+			<!--
+			<component:ChooseAsenceBox id="asenceBox" width="100%" meeting="{meeting}"/>
+			-->
+		</mx:HBox>
+		
+		
+		<mx:ViewStack id="meetingViewStack" width="100%" height="100%" creationPolicy="all">
+			<mx:VBox id="reportForm" width="100%" height="100%"
+					 left="6" right="6" top="6" bottom="6"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<richtexttoolbar:PopupRichTextToolBar width="100%" target="{textArea}"/>
+				<mx:TextArea id="textArea" width="100%" height="100%"
+							 editable="{!meeting || meeting.statusId &lt; 3}"/>
+				
+				<mx:HBox>
+					<mx:Label text="填写人："/>
+					<mx:TextInput id="personTxt" width="200"
+								  editable="{!meeting || meeting.statusId &lt; 3}"/>					
+				</mx:HBox>
+
+				
+				<mx:ControlBar width="100%" horizontalAlign="center" verticalAlign="middle">
+					<button:PcButton label="暂存" click="onSaveWithoutSubmit()"
+									 visible="{!meeting || meeting.statusId &lt; 3}"
+									 includeInLayout="{!detailMode}"/>
+					<button:PcButton label="上报" id="btn_commit" click="onSaveAndCommit()"
+									 visible="{!meeting || meeting.statusId &lt; 3}"
+									 includeInLayout="{!detailMode}"/>
+					<mx:Label id="remindTxt" text="" visible="false" includeInLayout="{!detailMode}"/>
+					<button:PcButton label="关闭" click="close()"/>
+					<button:PcButton label="查看驳回原因" id="btn_return" click="onGetReturnInfo()" includeInLayout="{!detailMode}"
+									 visible="{meeting &amp;&amp; meeting.statusId == 2}" />
+				</mx:ControlBar>
+			</mx:VBox>
+			
+			<mx:VBox id="browseForm" width="100%" height="100%"
+					 left="6" right="6" top="6" bottom="6"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<mx:Label text="会议内容:" fontWeight="bold"/>
+				<mx:HBox width="100%"  horizontalAlign="left" height="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+					<mx:VBox width="100%" height="100%" horizontalAlign="right">
+						<mx:TextArea id="b_textArea" width="100%" height="100%"
+									 editable="false"/>
+						<mx:HBox  horizontalCenter="0" width="100%">
+							<mx:Label id="b_personTxt" text="填写人："/>
+							<mx:Spacer width="100%"/>
+							<mx:Label id="dateTxt" text="日期："/>
+						</mx:HBox>	
+					</mx:VBox>
+				</mx:HBox>
+				
+				<mx:VBox id="browseForm_evaluate"  width="0" height="0" horizontalScrollPolicy="off" verticalScrollPolicy="off" visible="false">
+					<mx:Label text="评语:" fontWeight="bold"/>
+					<mx:TextArea id="b_textArea_eva" width="100%" height="100%"
+								 editable="false"/>	
+					<mx:HBox  horizontalCenter="0" width="100%">
+						<mx:Label left="0" id="b_personTxt_eva"/>
+						<mx:Spacer width="100%"/>
+						<mx:Label right="0"   id="dateTxt_eva"/>
+					</mx:HBox>							
+				</mx:VBox>
+				
+				
+				<mx:HBox id="rate_box" horizontalAlign="left" width="0" height="0" horizontalScrollPolicy="off" verticalScrollPolicy="off" visible="false">
+						<mx:Label text="评价:" fontWeight="bold"/>
+							<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate1" selected="true" label="好" value="1" /> 
+							<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate2" label="较好" value="2"/>
+							<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate3" label="一般" value="3"/>
+							<s:RadioButton groupName="rateGroup" fontFamily="宋体" id="rate4" label="差" value="4"/>
+							<mx:Spacer width="100%"/>
+							<mx:Label right="0" id="ratePersonTxt" text="评价主体："/>
+							<mx:Label left="0"   id="dateTxt_rate"/>
+						
+				</mx:HBox>				
+				
+				<mx:ControlBar width="100%" horizontalAlign="center" verticalAlign="middle">
+					<button:PcButton label="导出WORD" click="onExportToDoc()"
+									 visible="{meeting &amp;&amp; meeting.statusId >= 3 }"/>
+					<button:PcButton label="关闭" click="close()"/>
+				</mx:ControlBar>
+			</mx:VBox>			
+			
+		</mx:ViewStack>
+	</mx:VBox>
+	
+</control:EscapeWindow>

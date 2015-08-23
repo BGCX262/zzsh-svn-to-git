@@ -1,0 +1,361 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx"
+		   styleName="mainCanvas"
+		   width="100%" height="100%" 
+		   xmlns:button="com.partycommittee.control.button.*" 
+		   xmlns:datagrid="com.partycommittee.control.datagrid.*"
+		   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+		   xmlns:component="com.partycommittee.views.agencymgmt.component.*" xmlns:pagebar="com.partycommittee.control.pagebar.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.control.tree.classes.TreeOperationEvent;
+			import com.partycommittee.events.PcAgencyEvent;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.AgencyCodeUtil;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DateUtil;
+			import com.partycommittee.vo.PcAgencyInfoVo;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcMemberVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.core.FlexGlobals;
+			import mx.events.PropertyChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			private var _editEnable:Boolean = true;
+			[Bindable]
+			public function get editEnable():Boolean {
+				return this._editEnable;
+			}
+			public function set editEnable(value:Boolean):void {
+				this._editEnable = value;
+			}
+			
+			[Bindable]
+			private var agencyCodeDes:String;
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+
+			public function updateData():void {
+				if (!this._agency) {
+					return;
+				}
+				
+				agencyCodeDes = AgencyCodeUtil.getAgencyCodeDes(agency.codeId);
+//				orgNameTxt.text = agency.name;
+//				setupDateField.selectedDate = agency.setupDatetime;
+//				personChooseBox.member = agency.member;
+//				
+//				if (model.isTreeInitialized) {
+//					getAgencyInfo();
+//				}
+				
+				if (agency.codeId == 10) {
+					agencyViewStack.selectedChild = agencyInfo;
+					getAgencyInfo(agency);
+				} else {
+					agencyViewStack.selectedChild = agencyList;
+					getAgencyList(agency);
+				}
+			}
+			
+			private function getAgencyInfo(vo:PcAgencyVo):void {
+				var agencyEvt:PcAgencyEvent = new PcAgencyEvent(PcAgencyEvent.GET_AGENCY_INFO);
+				agencyEvt.agency = vo;
+				agencyEvt.successCallback = onGetAgencyInfoSuccess;
+				agencyEvt.failureCallback = onGetAgencyInfoFailure;
+				agencyEvt.dispatch();
+			}
+			
+			private function onGetAgencyInfoSuccess(data:Object, evt:PcAgencyEvent):void {
+				var agencyInfo:PcAgencyInfoVo = data as PcAgencyInfoVo;
+				if (!agencyInfo) {
+					return;
+				}
+				if (agency.invalidDatetime > 0) {
+					formInvalidTime.visible = true;
+				} else {
+					formInvalidTime.visible = false;
+				}
+//				teamNumberTxt.text = agencyInfo.teamNumber + "";
+//				memberNumberTxt.text = agencyInfo.memberNumber + "";
+				resetDutyMemberInfo();
+				for each (var memberVo:PcMemberVo in agencyInfo.dutyMemberList) {
+					switch (memberVo.dutyId) {
+						case PCConst.DUTY_SECRETARY:
+							zbsj.text += memberVo.name + " ";
+							break;
+						case PCConst.DUTY_DEPUTY_SECRETARY:
+							zbfsj.text += memberVo.name + " ";
+							break;
+						case PCConst.DUTY_ORGNIZATION_MEMBER:
+							zzwy.text += memberVo.name + " ";
+							break;
+						case PCConst.DUTY_PROPAGANDA_MEMBER:
+							xcwy.text += memberVo.name + " ";
+							break;
+						case PCConst.DUTY_DISCIPLINE_MEMBER:
+							jjwy.text += memberVo.name + " ";
+							break;
+						case PCConst.DUTY_YOUTH_MEMBER:
+							qnwy.text += memberVo.name + " ";
+							break;
+						case PCConst.DUTY_MASSES_MEMBER:
+							ghwy.text += memberVo.name + " ";
+							break;
+						case PCConst.DUTY_WOMEN_MEMBER:
+							fnwy.text += memberVo.name + " ";
+							break;
+						case PCConst.DUTY_SECRECY_MEMBER:
+							bmwy.text += memberVo.name + " ";
+							break;						
+					}
+				}
+			}
+			
+			private function resetDutyMemberInfo():void {
+
+				zbsj.text = '';
+				zbfsj.text = '';
+				zzwy.text = '';
+				xcwy.text = '';
+				jjwy.text = '';
+				qnwy.text = '';
+				ghwy.text = '';
+				fnwy.text = '';
+				bmwy.text = '';				
+			}
+			
+			private function onGetAgencyInfoFailure(info:Object, evt:PcAgencyEvent):void {
+				Alert.show(info.toString());
+			}
+
+			private function getUpdateAgency():PcAgencyVo {
+				var agencyVo:PcAgencyVo = new PcAgencyVo();
+				agencyVo.parentId = agency.parentId;
+				agencyVo.id = agency.id;
+				agencyVo.codeId = agency.codeId;
+				agencyVo.tel = agency.tel;
+				agencyVo.comment = agency.comment;
+				agencyVo.name = orgNameTxt.text;
+//				if (personChooseBox.member) {
+//					agencyVo.memberId = personChooseBox.member.id;
+//				} else {
+//					agencyVo.memberId = agency.memberId;
+//				}
+				agencyVo.memberId = agency.memberId;
+				agencyVo.setupDatetime = agency.setupDatetime;
+				agencyVo.createDatetime = agency.createDatetime;
+				return agencyVo;
+			}
+			
+			private function save():void {
+				if (!agency) {
+					return;
+				}
+				//var updateAgency:PcAgencyVo = getUpdateAgency();
+				var updateAgency:PcAgencyVo = agency;
+				if (updateAgency) {
+					var evt:PcAgencyEvent = new PcAgencyEvent(CRUDEventType.UPDATE, updateAgency);
+					evt.successCallback = onCallbackSuccessed;
+					evt.failureCallback = onCallbackFailure;
+					evt.dispatch();
+				}
+				this.enabled = false;
+			}
+			
+			private function reset():void {
+				orgNameTxt.text = agency.name;
+//				personChooseBox.member = agency.member;
+			}
+			
+			private function onCallbackSuccessed(data:Object, evt:PcAgencyEvent):void {
+				this.enabled = true;
+				this.agency = evt.agency;
+				// Dispatch event to update tree.
+				model.tree.dispatchEvent(new TreeOperationEvent(
+					TreeOperationEvent.NODE_CHANGED));
+			}
+			
+			private function onCallbackFailure(info:Object, evt:PcAgencyEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			private function getAgencyList(vo:PcAgencyVo):void {
+				var agencyEvt:PcAgencyEvent = new PcAgencyEvent(PcAgencyEvent.GET_CHILDREN);
+				agencyEvt.agency = vo;
+				agencyEvt.successCallback = onGetAgencyListSuccess;
+				agencyEvt.failureCallback = onGetAgencyListFailure;
+				agencyEvt.dispatch();
+			}
+			
+			private function onGetAgencyListSuccess(data:Object, evt:PcAgencyEvent):void {
+				var dp:ArrayCollection = data as ArrayCollection;
+				
+				var datas:ArrayCollection = new ArrayCollection();
+				for(var i:int = 0; i<dp.length; i++) {
+					var vo:PcAgencyVo = dp.getItemAt(i) as PcAgencyVo;
+					if (dp.getItemAt(i).codeId != 10) {
+						vo.setupDatetime = null;
+						vo.createDatetime = null;
+						vo.pcount = null;
+						vo.zbnum = null;
+					}
+					
+					datas.addItem(vo);
+				}
+								
+				agencyDataGrid.dataProvider = datas;
+			}
+			
+			private function onGetAgencyListFailure(info:Object, evt:PcAgencyEvent):void {
+				Alert.show(info.toString());
+			}			
+			
+			private function onItemDoubleClick():void {
+				var data:PcAgencyVo = agencyDataGrid.selectedItem as PcAgencyVo;
+				this._agency = data;
+				initAgency();
+				if (data.codeId == 10) {
+					agencyViewStack.selectedChild = agencyInfo;
+					getAgencyInfo(data);
+				} else {
+					agencyViewStack.selectedChild = agencyList;
+					
+					getAgencyList(data);
+				}
+			}		
+			
+			private function initAgency():void {
+				agencyCodeDes = AgencyCodeUtil.getAgencyCodeDes(agency.codeId);
+				orgTypeLbl.text = agencyCodeDes;
+				orgNameTxt.text = agency.name;
+				setupDateField.selectedDate = agency.setupDatetime;
+				createDateField.selectedDate = agency.createDatetime;
+				teamNumberTxt.text = agency.pcount.toString();
+				memberNumberTxt.text = agency.zbnum.toString();
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<mx:ViewStack id="agencyViewStack" width="100%" height="100%" creationPolicy="auto"
+				  left="6" right="6" top="6" bottom="6">
+			<mx:VBox id="agencyInfo" width="100%" height="100%"
+					 horizontalAlign="center" verticalAlign="middle"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<mx:HBox width="100%" height="100%"
+						 horizontalAlign="center" verticalAlign="middle"
+						 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+					<mx:Form width="100%" labelWidth="80">
+						<mx:FormItem label="组织性质:" width="100%">
+							<mx:Label id="orgTypeLbl" text="{agencyCodeDes}" width="100%"/>
+						</mx:FormItem>
+						<mx:FormItem label="支部名称:" required="true" width="100%">
+							<mx:TextInput id="orgNameTxt" text="{agency.name}" change="agency.name = orgNameTxt.text" width="100%" maxChars="60"/>
+						</mx:FormItem>
+						<!--
+						<mx:FormItem label="组织负责人:" width="100%"
+									 visible="{agency &amp;&amp; agency.codeId != PCConst.AGENCY_CODE_BOARDCOMMITTEES}"
+									 includeInLayout="{agency &amp;&amp; agency.codeId != PCConst.AGENCY_CODE_BOARDCOMMITTEES}">
+							<component:PersonChooseBox id="personChooseBox" width="100%"
+													   agency="{agency}"/>
+						</mx:FormItem>
+						-->
+						<mx:FormItem label="成立时间:" width="100%">
+							<mx:DateField id="createDateField" selectedDate="{agency.createDatetime}" change="agency.createDatetime = createDateField.selectedDate "  formatString="YYYY-MM-DD"/>
+						</mx:FormItem>						
+						<mx:FormItem label="改选时间:" width="100%">
+							<mx:DateField id="setupDateField" selectedDate="{agency.setupDatetime}" change="agency.setupDatetime = setupDateField.selectedDate "  formatString="YYYY-MM-DD"/>
+						</mx:FormItem>
+						<mx:FormItem label="党小组数:" width="100%">
+							<mx:TextInput id="teamNumberTxt" text="{agency.pcount.toString()}" change="agency.pcount = Number(teamNumberTxt.text)"  width="100%" restrict="0-9" maxChars="5"  />
+						</mx:FormItem>
+						<mx:FormItem label="支部人数:" width="100%">
+							<mx:TextInput id="memberNumberTxt" text="{agency.zbnum.toString()}" change="agency.zbnum = Number(memberNumberTxt.text)" width="100%" restrict="0-9" maxChars="5" />
+						</mx:FormItem>
+						<mx:FormItem id="formInvalidTime" label="撤销时间:" width="100%" visible="false">
+							<mx:TextInput id="invalidTimeTxt" text="{DateUtil.unix2ASDate(agency.invalidDatetime)}" width="100%" restrict="0-9" maxChars="5" />
+						</mx:FormItem>						
+					</mx:Form>
+					<mx:VRule height="90%"/>
+					<mx:Form width="100%" labelWidth="80">
+						<mx:FormItem label="支部书记:" >
+							<mx:Label id="zbsj"  />
+						</mx:FormItem>
+						<mx:FormItem label="支部副书记:" >
+							<mx:Label id="zbfsj"  />
+						</mx:FormItem>
+						<mx:FormItem label="组织委员:" >
+							<mx:Label id="zzwy" />
+						</mx:FormItem>
+						<mx:FormItem label="宣传委员:"  >
+							<mx:Label id="xcwy"  />
+						</mx:FormItem>
+						<mx:FormItem label="纪检委员:" >
+							<mx:Label id="jjwy"  />
+						</mx:FormItem>
+						<mx:FormItem label="青年委员:" >
+							<mx:Label id="qnwy"  />
+						</mx:FormItem>
+						<mx:FormItem label="工会委员:" >
+							<mx:Label id="ghwy"  />
+						</mx:FormItem>
+						<mx:FormItem label="妇女委员:" >
+							<mx:Label id="fnwy"  />
+						</mx:FormItem>
+						<mx:FormItem label="保密委员:" >
+							<mx:Label id="bmwy"  />
+						</mx:FormItem>				
+					</mx:Form>
+				</mx:HBox>
+				<mx:ControlBar width="100%" horizontalAlign="center"
+							   visible="{editEnable}" includeInLayout="{editEnable}">
+					<button:PcButton label="保存" click="save()"/>
+					<button:PcButton label="重置" click="reset()"/>
+				</mx:ControlBar>
+			</mx:VBox>
+	
+		
+		<mx:VBox id="agencyList" width="100%" height="100%"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">	
+			<mx:AdvancedDataGrid id="agencyDataGrid" width="100%" height="100%" 
+								 headerStyleName="dataGridHeader"
+								 sortableColumns="false" sortExpertMode="true"
+								 variableRowHeight="true"
+								 doubleClickEnabled="true"
+								 doubleClick="onItemDoubleClick()">
+				<mx:columns>
+					<mx:AdvancedDataGridColumn headerText="组织名称" dataField="name" />
+					<mx:AdvancedDataGridColumn headerText="成立时间" dataField="createDatetime" itemRenderer="com.partycommittee.renderers.setupDateTimeRenderer"/>
+					<mx:AdvancedDataGridColumn headerText="改选时间" dataField="setupDatetime" itemRenderer="com.partycommittee.renderers.setupDateTimeRenderer"/>
+					<mx:AdvancedDataGridColumn headerText="党小组数" dataField="pcount" />
+					<mx:AdvancedDataGridColumn headerText="支部人数" dataField="zbnum" />
+					<mx:AdvancedDataGridColumn headerText="支部书记" dataField="zbsj" />
+				</mx:columns>
+			</mx:AdvancedDataGrid>
+		</mx:VBox>		
+		
+		
+	</mx:ViewStack>
+</mx:Canvas>

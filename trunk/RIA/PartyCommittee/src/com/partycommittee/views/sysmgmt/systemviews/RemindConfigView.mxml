@@ -1,0 +1,490 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						   xmlns:s="library://ns.adobe.com/flex/spark" 
+						   xmlns:mx="library://ns.adobe.com/flex/mx"
+						   styleName="mainCanvas"
+						   width="100%" height="100%" 
+						   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+						   xmlns:components="com.lnczx.components.*"
+						   creationComplete="onCreationCompleted()" xmlns:button="com.partycommittee.control.button.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.events.PcRemindConfigEvent;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.vo.PcRemindConfigVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.events.PropertyChangeEvent;
+			
+			import spark.components.ComboBox;
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			private var dp:ArrayCollection = new ArrayCollection();
+			
+			[Bindable]
+			private var monthDp:ArrayCollection;
+			
+			[Bindable]
+			private var dayDp:ArrayCollection;			
+			
+			override protected function onNavigateIn():void {
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+				monthDp = createMonthDp();
+				dayDp = createDayDp();	
+				
+				if (model.remindConfigCollection) {
+					initRemindConfig();
+				} else {
+					refreshData();
+				}
+			}
+			
+			override protected function onNavigateOut():void {
+				model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+			}
+			
+			private function onModelChanged(event:PropertyChangeEvent):void {
+				if (event.property == "remindConfigCollection") {
+					refreshData();
+				}
+			}
+			
+			private function initRemindConfig():void {
+				var evt:PcRemindConfigEvent = new PcRemindConfigEvent(PcRemindConfigEvent.GET_REMIND_CONFIG_LIST);
+				evt.successCallback = onGetRemindConfigSuccess;
+				evt.dispatch();
+			}
+			
+			private function onGetRemindConfigSuccess(data:Object, evt:PcRemindConfigEvent):void {
+				if (!data) return;
+				model.remindConfigCollection = data as ArrayCollection;
+			}			
+			
+			private function onCreationCompleted():void {
+				onNavigateIn();
+				
+				if (this.tab && this.tab.selectedChild == this) {
+					refreshData();
+				}	
+			}
+			
+			public function refreshData(evt:* = null):void {
+				if (!model.remindConfigCollection || model.remindConfigCollection.length == 0) return;
+				dp = model.remindConfigCollection;
+				for(var i = 0; i< dp.length; i++) {
+					var vo:PcRemindConfigVo = dp.getItemAt(i) as PcRemindConfigVo;
+					if (vo) {
+						if (vo.typeId == 1) {
+							yp_start_monthCmb.selectedIndex = vo.startMonth - 1;
+							yp_start_dayCmb.selectedIndex = vo.startDay - 1;
+							yp_end_monthCmb.selectedIndex = vo.endMonth - 1;
+							yp_end_dayCmb.selectedIndex = vo.endDay - 1;
+							yp_value.text = vo.value.toString();
+							yp_delay_value.text = vo.delayDay.toString();
+						}
+						
+						if (vo.typeId == 4) {
+							ys_start_monthCmb.selectedIndex = vo.startMonth - 1;
+							ys_start_dayCmb.selectedIndex = vo.startDay - 1;
+							ys_end_monthCmb.selectedIndex = vo.endMonth - 1;
+							ys_end_dayCmb.selectedIndex = vo.endDay - 1;
+							ys_value.text = vo.value.toString();
+							ys_delay_value.text = vo.delayDay.toString();
+						}		
+						
+						if (vo.typeId == 2) {
+							qp_start_dayCmb.selectedIndex = vo.startDay - 1;
+							qp_end_dayCmb.selectedIndex = vo.endDay - 1;
+							qp_value.text = vo.value.toString();
+							qp_delay_value.text = vo.delayDay.toString();
+						}	
+						
+						if (vo.typeId == 3) {
+							qs_start_dayCmb.selectedIndex = vo.startDay - 1;
+							qs_end_dayCmb.selectedIndex = vo.endDay - 1;
+							qs_value.text = vo.value.toString();
+							qs_delay_value.text = vo.delayDay.toString();
+						}		
+						
+						if (vo.typeId == 5) {
+							dk_value.text = vo.value.toString();
+							dk_delay_value.text = vo.delayDay.toString();
+						}	
+						
+						if (vo.typeId == 6) {
+							dydh_value.text = vo.value.toString();
+							dydh_delay_value.text = vo.delayDay.toString();
+						}	
+						
+						if (vo.typeId == 7) {
+							mzshh_value.text = vo.value.toString();
+							mzshh_delay_value.text = vo.delayDay.toString();
+						}	
+						
+						
+						if (vo.typeId == 8) {
+							zwh_value.text = vo.value.toString();
+							zwh_delay_value.text = vo.delayDay.toString();
+						}						
+						
+						
+					} 
+				}
+			}
+
+			private function createMonthDp():ArrayCollection {
+				var monthCollection:ArrayCollection = new ArrayCollection();
+				for (var i:Number = 1; i <= 12; i++) {
+					monthCollection.addItem(i);
+				}
+				return monthCollection;
+			}
+			
+			private function createDayDp():ArrayCollection {
+				var dateCollection:ArrayCollection = new ArrayCollection();
+				for (var i:Number = 1; i <= 31; i++) {
+					dateCollection.addItem(i);
+				}
+				return dateCollection;
+			}			
+			
+			private function getFormData():Array {
+				var datas:Array = new Array();
+				for(var i = 0; i< dp.length; i++) {
+					var vo:PcRemindConfigVo = dp.getItemAt(i) as PcRemindConfigVo;
+					if (vo) {
+						if (vo.typeId == 1) {
+							vo.startMonth =	yp_start_monthCmb.selectedIndex + 1;
+							vo.startDay = yp_start_dayCmb.selectedIndex + 1;
+							vo.endMonth = yp_end_monthCmb.selectedIndex + 1;
+							vo.endDay = yp_end_dayCmb.selectedIndex + 1;
+							vo.value = parseFloat(yp_value.text);
+							vo.delayDay = parseFloat(yp_delay_value.text);
+						}
+						
+						if (vo.typeId == 4) {
+							vo.startMonth =	ys_start_monthCmb.selectedIndex + 1;
+							vo.startDay = ys_start_dayCmb.selectedIndex + 1;
+							vo.endMonth = ys_end_monthCmb.selectedIndex + 1;
+							vo.endDay = ys_end_dayCmb.selectedIndex + 1;
+							vo.value = parseFloat(ys_value.text);
+							vo.delayDay = parseFloat(ys_delay_value.text);
+						}		
+						
+						if (vo.typeId == 2) {
+							vo.startDay = qp_start_dayCmb.selectedIndex + 1;
+							vo.startQuarter = 0;
+							if (vo.startDay > 0) {
+								vo.startQuarter = -1;
+							}
+							vo.endDay = qp_end_dayCmb.selectedIndex + 1;
+							vo.value = parseFloat(qp_value.text);
+							vo.delayDay = parseFloat(qp_delay_value.text);
+						}	
+						
+						if (vo.typeId == 3) {
+							vo.startDay = qs_start_dayCmb.selectedIndex + 1;
+							vo.endDay = qs_end_dayCmb.selectedIndex + 1;
+							
+							if (vo.endDay > 0) {
+								vo.endQuarter = 1;
+							}							
+							
+							vo.value = parseFloat(qs_value.text);
+							vo.delayDay = parseFloat(qs_delay_value.text);
+						}		
+						
+						if (vo.typeId == 5) {
+							vo.value = parseFloat(dk_value.text);
+							vo.delayDay = parseFloat(dk_delay_value.text);
+						}	
+						
+						if (vo.typeId == 6) {
+							vo.value = parseFloat(dydh_value.text);
+							vo.delayDay = parseFloat(dydh_delay_value.text);
+						}	
+						
+						if (vo.typeId == 7) {
+							vo.value = parseFloat(mzshh_value.text);
+							vo.delayDay = parseFloat(mzshh_delay_value.text);
+						}	
+
+						if (vo.typeId == 8) {
+							vo.value = parseFloat(zwh_value.text);
+							vo.delayDay = parseFloat(zwh_delay_value.text);
+						}						
+						
+						datas.push(vo);
+					} 
+				}
+				return datas;
+			}
+			
+			private function save():void {
+				var evt:PcRemindConfigEvent = new PcRemindConfigEvent(PcRemindConfigEvent.UPDATE_REMIND_CONFIG);
+				evt.items = getFormData();
+				evt.successCallback = onSuccessCallback;
+				evt.failureCallback = onFailureCallback;
+				this.enabled = false;
+				evt.dispatch();
+			}			
+			
+			private function onSuccessCallback(data:Object, evt:PcRemindConfigEvent):void {
+				this.enabled = true;
+				model.remindConfigCollection = data as ArrayCollection;
+			}
+			
+			private function onFailureCallback(info:Object, evt:PcRemindConfigEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}			
+			
+			public function updateDayDp(index:int, d:String):void {
+				var month:int = index + 1;
+				
+				//Alert.show(dropMonth.selectedIndex.toString());
+				var dateCollection:ArrayCollection = new ArrayCollection();
+				dateCollection.removeAll();
+				//arrayDay.addItem("请选择")
+				
+				if (month==1 || month==3 || month==5 || month==7 || month==8 || month==10 || month==12)
+				{
+					for (var i:int=1;i<=31;i++)
+					{
+						dateCollection.addItem(i);
+					}
+				}
+					
+				else if (month==4 || month==6 || month==9 || month==11)
+				{
+					for (i=1;i<=30;i++)
+					{
+						dateCollection.addItem(i);
+					}
+				}
+					
+				else if (month==2)
+				{
+					var year:int = DateUtilExt.now().getFullYear();
+					
+					if ((year%4==0 && year%100!=0)||(year%400==0))
+					{
+						for (i=1;i<=29;i++)
+						{
+							dateCollection.addItem(i);
+						}
+					}
+						
+					else
+					{
+						for (i=1;i<=28;i++)
+						{
+							dateCollection.addItem(i);
+						}
+					}
+				}
+				
+			    switch(d) {
+					case 'yp_start_dayCmb':
+						yp_start_dayCmb.dataProvider = dateCollection;
+						break;
+					
+					case 'yp_end_dayCmb':
+						yp_end_dayCmb.dataProvider = dateCollection;
+						break;
+					
+					case 'ys_start_dayCmb':
+						ys_start_dayCmb.dataProvider = dateCollection;
+						break;
+					
+					case 'ys_end_dayCmb':
+						ys_end_dayCmb.dataProvider = dateCollection;
+						break;
+				}
+					
+				
+			}			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<navigation:constraintRows>
+		<s:ConstraintRow id="headerRow" height="30"/>
+		<s:ConstraintRow id="mainRow" height="100%"/>
+	</navigation:constraintRows>
+	
+	<mx:Canvas top="headerRow:0" bottom="headerRow:0"
+			   width="100%">
+		<mx:Label fontSize="20" fontWeight="bold"
+				  horizontalCenter="0" verticalCenter="0"
+				  text="提醒设定"/>
+	</mx:Canvas>
+	
+	<mx:VBox width="100%" top="mainRow:0" bottom="mainRow:0">
+
+		
+			<components:GroupBox skinClass="com.lnczx.skins.GroupBoxSkin" title="支部年度计划" cornerRadius="5" fontSize="14">  
+					<mx:HBox>
+						<mx:Label text="  填报时限:"/>
+						<mx:Label text="上年:"/>
+						<mx:ComboBox id="yp_start_monthCmb" dataProvider="{monthDp}" change="updateDayDp(yp_start_monthCmb.selectedIndex, 'yp_start_dayCmb')"/>
+						<mx:Label text="月"/>
+						<mx:ComboBox id="yp_start_dayCmb" dataProvider="{dayDp}"/>
+						<mx:Label text="日"/>
+						<mx:Label text="至本年:"/>
+						<mx:ComboBox id="yp_end_monthCmb" dataProvider="{monthDp}" change="updateDayDp(yp_end_monthCmb.selectedIndex, 'yp_end_dayCmb')"/>
+						<mx:Label text="月"/>
+						<mx:ComboBox id="yp_end_dayCmb" dataProvider="{dayDp}"/>
+						<mx:Label text="日"/>
+						<mx:Label text="提示时间:截止前"/>
+						<mx:TextInput id="yp_value" width="100%" restrict="0-9" maxChars="5"  />
+						<mx:Label text="日"/>
+						
+						<mx:Label text="延后:"/>
+						<mx:TextInput id="yp_delay_value" width="100%" restrict="0-9" maxChars="5"  />
+						<mx:Label text="日"/>						
+					</mx:HBox>				
+
+			</components:GroupBox>
+		
+			<components:GroupBox skinClass="com.lnczx.skins.GroupBoxSkin" title="支部年终总结" cornerRadius="5" fontSize="14">  
+				<mx:HBox>
+					<mx:Label text="  填报时限:"/>
+					<mx:Label text="本年:"/>
+					<mx:ComboBox id="ys_start_monthCmb" dataProvider="{monthDp}" change="updateDayDp(ys_start_monthCmb.selectedIndex, 'ys_start_dayCmb')"/>
+					<mx:Label text="月"/>
+					<mx:ComboBox id="ys_start_dayCmb" dataProvider="{dayDp}"/>
+					<mx:Label text="日"/>
+					<mx:Label text="至次年:"/>
+					<mx:ComboBox id="ys_end_monthCmb" dataProvider="{monthDp}" change="updateDayDp(ys_end_monthCmb.selectedIndex, 'ys_end_dayCmb')"/>
+					<mx:Label text="月"/>
+					<mx:ComboBox id="ys_end_dayCmb" dataProvider="{dayDp}"/>
+					<mx:Label text="日"/>
+					<mx:Label text="提示时间:截止前"/>
+					<mx:TextInput id="ys_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>
+					<mx:Label text="延后:"/>
+					<mx:TextInput id="ys_delay_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>						
+				</mx:HBox>				
+				
+			</components:GroupBox>
+				
+			<components:GroupBox skinClass="com.lnczx.skins.GroupBoxSkin" title="支部季度工作安排" cornerRadius="5" fontSize="14">  
+				<mx:HBox>
+					<mx:Label text="  填报时限:"/>
+					<mx:Label text="上季度末:"/>
+					<mx:ComboBox id="qp_start_dayCmb" dataProvider="{dayDp}"/>
+					<mx:Label text="日"/>
+					<mx:Label text="至本季度初:"/>
+					<mx:ComboBox id="qp_end_dayCmb" dataProvider="{dayDp}"/>
+					<mx:Label text="日"/>
+					<mx:Label text="提示时间:截止前"/>
+					<mx:TextInput id="qp_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>
+					<mx:Label text="延后:"/>
+					<mx:TextInput id="qp_delay_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>	
+				</mx:HBox>				
+				
+			</components:GroupBox>	
+			
+			<components:GroupBox skinClass="com.lnczx.skins.GroupBoxSkin" title="支部季度工作执行情况" cornerRadius="5" fontSize="14">  	
+				<mx:HBox>
+					<mx:Label text="  填报时限:"/>
+					<mx:Label text="本季度末:"/>
+					<mx:ComboBox id="qs_start_dayCmb" dataProvider="{dayDp}"/>
+					<mx:Label text="日"/>
+					<mx:Label text="至次季度初:"/>
+					<mx:ComboBox id="qs_end_dayCmb" dataProvider="{dayDp}"/>
+					<mx:Label text="日"/>
+					<mx:Label text="提示时间:截止前"/>
+					<mx:TextInput id="qs_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>
+					<mx:Label text="延后:"/>
+					<mx:TextInput id="qs_delay_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>						
+				</mx:HBox>				
+				
+			</components:GroupBox>
+				
+			<components:GroupBox skinClass="com.lnczx.skins.GroupBoxSkin" title="支部党员大会" cornerRadius="5" fontSize="14">  	
+				<mx:HBox>
+					<mx:Label text="  填报时限:  每季度结束前"/>
+					<mx:Label text="提示时间:截止前"/>
+					<mx:TextInput id="dydh_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>
+					<mx:Label text="延后:"/>
+					<mx:TextInput id="dydh_delay_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>	
+				</mx:HBox>				
+				
+			</components:GroupBox>	
+		
+			<components:GroupBox skinClass="com.lnczx.skins.GroupBoxSkin" title="支部民主生活会" cornerRadius="5" fontSize="14">  				
+				<mx:HBox>
+					<mx:Label text="  填报时限:  每季度结束前"/>
+					<mx:Label text="提示时间:截止前"/>
+					<mx:TextInput id="mzshh_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>
+					<mx:Label text="延后:"/>
+					<mx:TextInput id="mzshh_delay_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>	
+				</mx:HBox>				
+				
+			</components:GroupBox>	
+		
+			<components:GroupBox skinClass="com.lnczx.skins.GroupBoxSkin" title="党课" cornerRadius="5" fontSize="14">  				
+				
+				<mx:HBox>
+					<mx:Label text="  填报时限:  每季度结束前"/>
+					<mx:Label text="提示时间:截止前"/>
+					<mx:TextInput id="dk_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>
+					<mx:Label text="延后:"/>
+					<mx:TextInput id="dk_delay_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>	
+				</mx:HBox>				
+				
+			</components:GroupBox>	
+		
+				<components:GroupBox skinClass="com.lnczx.skins.GroupBoxSkin" title="支委会" cornerRadius="5" fontSize="14">
+				<mx:HBox>
+					<mx:Label text="  填报时限:  每月结束前"/>
+					<mx:Label text="提示时间:截止前"/>
+					<mx:TextInput id="zwh_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>
+					<mx:Label text="延后:"/>
+					<mx:TextInput id="zwh_delay_value" width="100%" restrict="0-9" maxChars="5"  />
+					<mx:Label text="日"/>	
+				</mx:HBox>				
+				
+			</components:GroupBox>		
+		
+			<components:GroupBox skinClass="com.lnczx.skins.GroupBoxSkin" title="其他(或党日活动等)" cornerRadius="5" fontSize="14">
+				<mx:HBox>
+					<mx:Label text="  随时活动随时填报"/>
+					<mx:Label text="提示时间:无提示"/>
+				</mx:HBox>				
+				
+			</components:GroupBox>		
+			
+		<mx:ControlBar width="100%" horizontalAlign="center">
+			<button:PcButton label="保存" click="save()" />
+			<button:PcButton label="取消" click=""/>
+		</mx:ControlBar>
+	</mx:VBox>
+	
+</navigation:NavigationView>

@@ -1,0 +1,248 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  height="650" width="800"
+					  title="季度执行情况"
+					  creationComplete="onCreationCompleted()"
+					  xmlns:button="com.partycommittee.control.button.*" 
+					  xmlns:richtexttoolbar="com.partycommittee.control.richtexttoolbar.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcWorkPlanEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.WorkPlanCodeUtil;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcWorkPlanContentVo;
+			import com.partycommittee.vo.PcWorkPlanVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			
+			private var isNew:Boolean = true;
+			
+			[Bindable]
+			private var year:Number;
+			[Bindable]
+			private var quarter:Number = 1;
+			
+			private var _workPlan:PcWorkPlanVo;
+			[Bindable]
+			public function get workPlan():PcWorkPlanVo {
+				return this._workPlan;
+			}
+			public function set workPlan(value:PcWorkPlanVo):void {
+				this._workPlan = value;
+			}
+			
+			[Bindable]
+			private var yearDp:ArrayCollection;
+			[Bindable]
+			private var quarterDp:ArrayCollection = new ArrayCollection([
+				{label:"第一季度", value:1},
+				{label:"第二季度", value:2},
+				{label:"第三季度", value:3},
+				{label:"第四季度", value:4}
+			]);
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			private var _parentView:QuarterWorkPlanListView;
+			[Bindable]
+			public function get parentView():QuarterWorkPlanListView {
+				return this._parentView;
+			}
+			public function set parentView(value:QuarterWorkPlanListView):void {
+				this._parentView = value;
+			}
+			
+			private function onCreationCompleted():void {
+				updateData();
+			}
+			
+			private function updateData():void {
+				if (!agency || !workPlan) {
+					return;
+				}
+				
+				year = workPlan.year;
+				quarter = workPlan.quarter;
+				
+				if (workPlan.id) {
+					isNew = false;
+					if (workPlan.workPlanContent) {
+						personTxt.text = workPlan.workPlanContent.memberName;
+						textArea.text = workPlan.workPlanContent.content;
+					} else {
+						loadWorkPlanContent();
+					}
+				} else {
+					isNew = true;
+				}
+			}
+			
+			private function loadWorkPlanContent():void {
+				var evt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_CONTENT_INFO);
+				evt.workPlan = workPlan;
+				evt.contentType = 1;
+				evt.successCallback = onLoadContentSuccess;
+				evt.failureCallback = onLoadContentFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function onLoadContentSuccess(data:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				var workPlanContent:PcWorkPlanContentVo = data as PcWorkPlanContentVo;
+				personTxt.text = workPlanContent.memberName;
+				textArea.htmlText = workPlanContent.content;
+			}
+			
+			private function onLoadContentFailure(info:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show("读取执行情况内容失败！");
+			}
+			
+			private function resetData():void {
+				workPlan = null;
+				personTxt.text = "";
+				textArea.htmlText = "";
+			}
+			
+			private function onSaveAndCommit():void {
+				if (!isNew) {
+					doUpdate(true);
+				} else {
+					doCreate(true);
+				}
+			}
+			
+			private function onSaveWithoutSubmit():void {
+				if (!isNew) {
+					doUpdate();
+				} else {
+					doCreate();
+				}
+			}
+			
+			private function doUpdate(isCommit:Boolean = false):void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(CRUDEventType.UPDATE);
+				var updateWorkPlan:PcWorkPlanVo = getUpdateWorkPlan();
+				updateWorkPlan.statusId = isCommit ? 1 : 2;
+				workPlanEvt.workPlan = updateWorkPlan;
+				workPlanEvt.successCallback = onWorkPlanUpdateSuccess;
+				workPlanEvt.failureCallback = onWorkPlanUpdateFailure;
+				this.enabled = false;
+				workPlanEvt.dispatch();
+			}
+			
+			private function doCreate(isCommit:Boolean = false):void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(CRUDEventType.CREATE);
+				var newWorkPlan:PcWorkPlanVo = getNewWorkPlan();
+				newWorkPlan.statusId = isCommit ? 1 : 2;
+				workPlanEvt.workPlan = newWorkPlan;
+				workPlanEvt.successCallback = onWorkPlanCreateSuccess;
+				workPlanEvt.failureCallback = onWorkPlanCreateFailure;
+				this.enabled = false;
+				workPlanEvt.dispatch();
+			}
+			
+			private function onWorkPlanCreateSuccess(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				parentView.updateData();
+				this.close();
+			}
+			
+			private function onWorkPlanCreateFailure(info:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show("保存季度执行情况失败！");
+			}
+			
+			private function onWorkPlanUpdateSuccess(data:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				parentView.updateData();
+				this.close();
+			}
+			
+			private function onWorkPlanUpdateFailure(info:Object, workPlanEvt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show("修改季度执行情况失败！");
+			}
+			
+			private function getNewWorkPlan():PcWorkPlanVo {
+				var workPlan:PcWorkPlanVo = new PcWorkPlanVo();
+				workPlan.typeId = PCConst.WORKPLAN_TYPE_QUARTER_SUMMARY;
+				workPlan.year = year;
+				workPlan.quarter = quarter;
+				workPlan.agencyId = agency.id;
+				workPlan.workPlanContent = getWorkPlanContent();
+				return workPlan;
+			}
+			
+			private function getUpdateWorkPlan():PcWorkPlanVo {
+				workPlan.workPlanContent.memberName = personTxt.text;
+				workPlan.workPlanContent.content = textArea.htmlText;
+				return workPlan;
+			}
+			
+			private function getWorkPlanContent():PcWorkPlanContentVo {
+				var workPlanContent:PcWorkPlanContentVo = new PcWorkPlanContentVo();
+				workPlanContent.content = textArea.htmlText;
+				workPlanContent.memberName = personTxt.text;
+				workPlanContent.type = PCConst.WORKFLOW_TYPE_REPORT;
+				return workPlanContent;
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 left="6" right="6" top="6" bottom="6"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:HBox width="100%" horizontalAlign="center"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label fontSize="20" fontWeight="bold" text="{year + '年度第' + quarter + '季度执行情况'}"/>
+			<mx:Label fontSize="20" fontWeight="bold"
+					  text="{(workPlan &amp;&amp; workPlan.statusId == 3) ? ' （已上报）' : ''}"/>
+		</mx:HBox>
+		<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label text="年    份："/>
+			<mx:Label text="{year}"/>
+		</mx:HBox>
+		<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label text="季    度："/>
+			<mx:Label text="{quarter}"/>
+		</mx:HBox>
+		<mx:HBox width="100%" horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label text="填写人："/>
+			<mx:TextInput id="personTxt" width="200"
+						  editable="{!workPlan || workPlan.statusId == 3}"/>
+		</mx:HBox>
+		<richtexttoolbar:PopupRichTextToolBar width="100%" target="{textArea}"/>
+		<mx:TextArea id="textArea" width="100%" height="100%"
+					 editable="{!workPlan || workPlan.statusId == 3}"/>
+		<mx:ControlBar width="100%" horizontalAlign="center" verticalAlign="middle">
+			<button:PcButton label="暂存" click="onSaveWithoutSubmit()"
+							 visible="{!workPlan || workPlan.statusId == 3}"/>
+			<button:PcButton label="上报" click="onSaveAndCommit()"
+							 visible="{!workPlan || workPlan.statusId == 3}"/>
+			<button:PcButton label="关闭" click="close()"/>
+		</mx:ControlBar>
+	</mx:VBox>
+	
+</control:EscapeWindow>

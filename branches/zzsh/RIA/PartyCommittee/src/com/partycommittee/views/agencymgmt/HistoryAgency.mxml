@@ -1,0 +1,180 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						   xmlns:s="library://ns.adobe.com/flex/spark" 
+						   xmlns:mx="library://ns.adobe.com/flex/mx"
+						   styleName="mainCanvas"
+						   width="100%" height="100%" 
+						   xmlns:button="com.partycommittee.control.button.*" 
+						   xmlns:datagrid="com.partycommittee.control.datagrid.*"
+						   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+						   xmlns:component="com.partycommittee.views.agencymgmt.component.*"
+						   creationComplete="onCreationCompleted()" 
+						   xmlns:agencyviews="com.partycommittee.views.agencymgmt.agencyviews.*" 
+						   xmlns:tree="com.partycommittee.control.tree.*" 
+						   xmlns:partymember="com.partycommittee.views.partymember.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.control.mainmenu.Menu;
+			import com.partycommittee.control.mainmenu.MenuItem;
+			import com.partycommittee.control.tree.classes.Node;
+			import com.partycommittee.controller.Controller;
+			import com.partycommittee.events.AccordionItemClickEvent;
+			import com.partycommittee.events.PcAgencyEvent;
+			import com.partycommittee.events.PcBulletinEvent;
+			import com.partycommittee.events.PcMemberEvent;
+			import com.partycommittee.events.PcRemindConfigEvent;
+			import com.partycommittee.events.PcUserEvent;
+			import com.partycommittee.manager.navigation.NavigationMgr;
+			import com.partycommittee.manager.tree.TreeHistoryContextMenuMgr;
+			import com.partycommittee.manager.tree.TreeHistoryMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.UserUtil;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcUserVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.DividerEvent;
+			import mx.events.PropertyChangeEvent;
+			
+			[Bindable]
+			private var datas:ArrayCollection = new ArrayCollection();
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+						
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}			
+			
+			private function onCreationCompleted():void {
+				
+				if (!model.treeHistoryCollection) {
+					model.treeHistoryCollection = new ArrayCollection();
+				}
+				
+				
+				model.treeHistory = this.treeRevert;
+				TreeHistoryContextMenuMgr.getInstance().registeContextMenu(treeRevert);
+				
+				var agencyEvent:PcAgencyEvent = new PcAgencyEvent(PcAgencyEvent.GET_ROOT_HISTORY_AGENCY_BY_USERID);
+				agencyEvent.userId = model.loginUser.id;
+				agencyEvent.successCallback = onGetRootAgencySuccess;
+				agencyEvent.failureCallback = onGetRootAgencyFailure;
+				agencyEvent.dispatch()				
+				
+			}
+			
+			override protected function onNavigateIn():void {
+				if (agency != model.focusHistoryAgencyVo) {
+					agency = model.focusHistoryAgencyVo;
+				}
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+			}			
+			
+			override protected function onNavigateOut():void {
+				model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+			}			
+			
+			private function onModelChanged(event:PropertyChangeEvent):void {
+				if (event.property == "focusHistoryAgencyVo") {
+					if (model.focusHistoryAgencyVo.codeId == 10) {
+						agency = model.focusHistoryAgencyVo;
+						updateData();
+					}
+				}
+							
+			}			
+			
+			
+			private function onGetRootAgencySuccess(data:Object, evt:PcAgencyEvent):void {
+				if (!data) return;
+				TreeHistoryMgr.getInstance().initRoot(data as PcAgencyVo);			
+			}		
+			
+			private function onGetRootAgencyFailure(data:Object, evt:PcAgencyEvent):void {
+		
+			}				
+			
+			private var _isTreeMinSize:Boolean = false;
+			private var _treeNormalSize:Number = 228;
+			private function onDividerDoubleClick(event:MouseEvent):void {
+				if (this._isTreeMinSize) {
+					expandTree();
+				} else {
+					unExpandTree();
+				}
+			}
+			
+			private function expandTree():void {
+				treeRevertBox.width = this._treeNormalSize;
+				this._isTreeMinSize = false;
+			}
+			
+			private function unExpandTree():void {
+				this._treeNormalSize = treeRevertBox.width;
+				treeRevertBox.width = 0;
+				this._isTreeMinSize = true;
+			}
+			
+			private function onItemClick():void {
+				var focusNode:Node = treeRevert.selectedItem as Node;
+				if (!focusNode.entity) {
+					return;
+				}
+				var focusAgency:PcAgencyVo = focusNode.entity as PcAgencyVo;
+				model.focusHistoryAgencyVo = focusAgency;
+				
+			}			
+			
+			private function updateData():void {
+				if (!this._agency) {
+					return;
+				}
+				
+				if (agency.codeId == 10) {
+					agencyView.updateData();
+					memberView.updateData();
+				}
+			}			
+			
+
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<mx:Canvas id="container" width="100%" height="100%">
+		<mx:HDividedBox id="hDivBoxHistory" width="100%" height="100%">
+			<mx:VBox id="treeRevertBox" width="228" height="100%"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<tree:LoadingTreeRevert id="treeRevert" width="100%" height="100%" 
+								  dataProvider="{model.treeHistoryCollection}"
+								  doubleClickEnabled="true"
+								  itemClick="onItemClick()"/>
+			</mx:VBox>
+			<mx:VBox id="agencyBase" width="100%" height="100%"
+					 horizontalAlign="center" verticalAlign="middle"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				
+				<mx:TabNavigator width="100%" height="100%">
+					<agencyviews:AgencyView id="agencyView" width="100%" height="100%" 
+											label="基本情况" agency="{agency}"/>
+					<!--
+					<agencyviews:ChildrenAgencyView id="childrenView" width="100%" height="100%"
+					label="下级党组织管理" agency="{agency}"/>
+					-->
+					<partymember:PartyMemberView id="memberView" width="100%" height="100%" 
+												 label="支委管理" agency="{agency}" editEnable="false"/>
+				</mx:TabNavigator>
+			</mx:VBox>
+		</mx:HDividedBox>
+	</mx:Canvas>
+</navigation:NavigationView>

@@ -1,0 +1,179 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView  xmlns:fx="http://ns.adobe.com/mxml/2009" 
+							xmlns:s="library://ns.adobe.com/flex/spark" 
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							styleName="mainCanvas"
+							width="100%" height="100%" 
+							xmlns:button="com.partycommittee.control.button.*" 
+							xmlns:datagrid="com.partycommittee.control.datagrid.*"
+							xmlns:navigation="com.partycommittee.manager.navigation.*" 
+							xmlns:pagebar="com.partycommittee.control.pagebar.*"
+							creationComplete="onCreationCompleted()">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcBackupEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.LblFunctionHelper;
+			import com.partycommittee.vo.PcBackupVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			import com.partycommittee.vo.page.PageResultVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.controls.DataGrid;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			private var _editEnable:Boolean = true;
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			private var dp:ArrayCollection = new ArrayCollection();
+			
+			private var _backup:PcBackupVo;
+			
+			public function get backup():PcBackupVo
+			{
+				return _backup;
+			}
+			
+			public function set backup(value:PcBackupVo):void
+			{
+				_backup = value;
+			}
+			
+			
+			private var _page:PageHelperVo;
+			[Bindable]
+			public function get page():PageHelperVo {
+				if (!this._page) {
+					this._page = new PageHelperVo();
+				}
+				return this._page;
+			}
+			public function set page(value:PageHelperVo):void {
+				this._page = value;
+			}
+			
+			private function onCreationCompleted():void {
+				if (this.tab && this.tab.selectedChild == this) {
+					refreshData();
+				}	
+			}			
+			
+			public function updateData():void {
+				refreshData();
+			}
+			
+			private function refreshData():void {
+				var evt:PcBackupEvent = new PcBackupEvent(PcBackupEvent.GET_BACKUP_LIST);
+				evt.page = page;
+				evt.successCallback = onRefresh;
+				evt.dispatch();
+			}
+			
+			private function onRefresh(data:Object, event:PcBackupEvent):void {
+				var pageResult:PageResultVo = data as PageResultVo;
+				if (!pageResult) {
+					return;
+				}
+				page = pageResult.pageHelper;
+				dp = pageResult.list;	
+			}
+			
+			private function addBackup():void {
+				Alert.show("确定要备份当前数据吗？", "提示", 
+					Alert.YES | Alert.NO, FlexGlobals.topLevelApplication.root, onAddAlertClose);
+			}
+			
+			private function onAddAlertClose(event:CloseEvent):void {
+				if (event.detail == Alert.YES) {
+					doAdd();
+				}
+			}
+			
+			private function doAdd():void {
+				var evt:PcBackupEvent = new PcBackupEvent(CRUDEventType.CREATE);
+				evt.successCallback = onSuccess;
+				evt.failureCallback = onFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			
+			private function deleteBackup():void {
+				var vo:PcBackupVo = datagrid.selectedItem as PcBackupVo;
+				Alert.show("确定删除备份数据【" + vo.filename + "】？", "提示", 
+					Alert.YES | Alert.NO, FlexGlobals.topLevelApplication.root, onDeleteAlertClose);
+			}
+			
+			private function onDeleteAlertClose(event:CloseEvent):void {
+				if (event.detail == Alert.YES) {
+					doDelete();
+				}
+			}
+			
+			private function doDelete():void {
+				var evt:PcBackupEvent = new PcBackupEvent(CRUDEventType.DELETE, datagrid.selectedItem as PcBackupVo);
+				evt.successCallback = onSuccess;
+				evt.failureCallback = onFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function onSuccess(data:Object, evt:PcBackupEvent):void {
+				this.enabled = true;
+				Alert.show("操作成功");
+				updateData();
+			}
+			
+			private function onFailure(info:Object, evt:PcBackupEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:ControlBar width="100%" horizontalAlign="right">
+			<button:PcButton label="开始备份" click="addBackup()"/>
+			<button:PcButton label="删除" click="deleteBackup()" enabled="{datagrid.selectedItem}"/>
+		</mx:ControlBar>
+		
+		<mx:AdvancedDataGrid id="datagrid" designViewDataType="flat" 
+							 horizontalScrollPolicy="auto"
+							 verticalScrollPolicy="auto"
+							 width="100%" height="100%" color="0x323232"  
+							 sortableColumns="false" sortExpertMode="true"
+							 variableRowHeight="true"
+							 doubleClickEnabled="true"
+							 dataProvider="{dp}"
+							 >  
+			
+			<mx:columns>
+				<mx:AdvancedDataGridColumn headerText="序号" dataField="id"  />
+				<mx:AdvancedDataGridColumn headerText="文件名" dataField="filename" width="300"/>
+				<mx:AdvancedDataGridColumn headerText="备份时间" dataField="backupTime" 
+										   labelFunction="{LblFunctionHelper.dateTimeLblFunc}"/>			
+			</mx:columns>
+		</mx:AdvancedDataGrid>
+		
+	</mx:VBox>
+	
+</navigation:NavigationView>

@@ -1,0 +1,190 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  xmlns:button="com.partycommittee.control.button.*"
+					  horizontalScrollPolicy="off" verticalScrollPolicy="off"
+					  creationComplete="onCreationCompleted()" 
+					  xmlns:component="com.partycommittee.views.agencymgmt.component.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcAgencyEvent;
+			import com.partycommittee.events.PcMeetingEvent;
+			import com.partycommittee.events.PcWorkPlanEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.vo.PcMeetingContentVo;
+			import com.partycommittee.vo.PcMeetingVo;
+			import com.partycommittee.vo.PcWorkPlanContentVo;
+			import com.partycommittee.vo.PcWorkPlanVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.managers.PopUpManager;
+			
+			public var callbackFunction:Function; //回调函数   
+			
+			private var _reportId:Number;
+
+			public function get reportId():Number
+			{
+				return _reportId;
+			}
+
+			public function set reportId(value:Number):void
+			{
+				_reportId = value;
+			}
+
+			// 判断是工作计划还是会议： workplan   meeting
+			private var _type:String;
+
+			public function get type():String
+			{
+				return _type;
+			}
+
+			public function set type(value:String):void
+			{
+				_type = value;
+			}
+			
+			
+			// 判断是填写类型还是浏览类型   report or browse
+			private var _modelType:String;
+
+			public function get modelType():String
+			{
+				return _modelType;
+			}
+
+			public function set modelType(value:String):void
+			{
+				_modelType = value;
+			}
+
+
+			private function onCreationCompleted():void {
+				updateData();
+			}
+			
+			private function updateData():void {
+				if (modelType == 'browse') {
+					if (type == 'workplan') {
+						doGetWorkPlanReturnInfo();
+					} else if (type == 'meeting') {
+						doGetMeetingReturnInfo();
+					}
+				}
+				
+			}
+			
+			private function doGetWorkPlanReturnInfo():void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_CONTENT_INFO);
+				var workPlan:PcWorkPlanVo = new PcWorkPlanVo();
+				workPlan.id = reportId;
+				workPlanEvt.workPlan = workPlan;
+				workPlanEvt.contentType = 2;
+				workPlanEvt.successCallback = onGetWorkPlanReturnInfoSuccess;
+				workPlanEvt.failureCallback = onGetWorkPlanReturnInfofoFailure;
+				workPlanEvt.dispatch();
+			}
+			
+			private function onGetWorkPlanReturnInfoSuccess(data:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				var workplanContent:PcWorkPlanContentVo = data as PcWorkPlanContentVo;
+				if (!workplanContent) {
+					return;
+				}
+				returnTxt.text = workplanContent.content;
+				returnPerson.text = workplanContent.memberName;
+				btn_save.visible = false;
+			}
+			
+			private function onGetWorkPlanReturnInfofoFailure(info:Object, evt:PcWorkPlanEvent):void {
+				//Alert.show("获取内容失败！");
+			}			
+			
+			private function doGetMeetingReturnInfo():void {
+				var meetingEvt:PcMeetingEvent = new PcMeetingEvent(PcMeetingEvent.GET_CONTENT_INFO);
+				var meeting:PcMeetingVo = new PcMeetingVo();
+				meeting.id = reportId;
+				meetingEvt.meeting = meeting;
+				meetingEvt.meetingType = 2;
+				meetingEvt.successCallback = onGetMeetingReturnInfoSuccess;
+				meetingEvt.failureCallback = onGetMeetingReturnInfoFailure;
+				this.enabled = false;
+				meetingEvt.dispatch();
+			}
+			
+			private function onGetMeetingReturnInfoSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				var meetingContent:PcMeetingContentVo = data as PcMeetingContentVo;
+				if (!meetingContent) {
+					return;
+				}
+				returnTxt.text = meetingContent.content;
+				returnPerson.text = meetingContent.memberName;
+				btn_save.visible = false;
+			}
+			
+			private function onGetMeetingReturnInfoFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show("获取内容失败！");
+			}				
+			
+			
+			
+			private function validateForm():Boolean {
+				if (returnTxt.text.length == 0) {
+					Alert.show("驳回原因不能为空!");
+					return false;
+				}
+				
+				if (returnPerson.text.length == 0) {
+					Alert.show("驳回主体不能为空!");
+					return false;
+				}
+				
+				return true;
+				
+			}
+			
+			private function save():void {
+				if (validateForm() == true) {	
+					PopUpManager.removePopUp(this);
+					callbackFunction.call(parent, returnTxt.text, returnPerson.text);
+				}
+				
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox height="100%" width="100%"
+			 horizontalAlign="center" verticalAlign="middle"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:Form width="450" height="100%"
+				 minWidth="200">
+			<mx:FormItem label="驳回原因:" width="100%">
+				<mx:TextArea id="returnTxt" width="100%" height="80"/>
+			</mx:FormItem>
+			<mx:FormItem label="驳回主体"  width="100%">
+				<mx:TextInput id="returnPerson"/>
+			</mx:FormItem>
+						 
+		</mx:Form>
+		<mx:ControlBar width="100%" horizontalAlign="center">
+			<button:PcButton label="保存" id="btn_save" click="save()"/>
+			<button:PcButton label="关闭" click="close()"/>
+		</mx:ControlBar>
+	</mx:VBox>
+</control:EscapeWindow>

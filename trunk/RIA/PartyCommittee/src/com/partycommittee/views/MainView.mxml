@@ -1,0 +1,145 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009"
+           xmlns:s="library://ns.adobe.com/flex/spark"
+           xmlns:mx="library://ns.adobe.com/flex/mx" 
+           xmlns:controls="com.hp.client.controls.*"
+		   horizontalCenter="0" verticalCenter="0"
+           creationComplete="onCreationCompleted()" 
+		   xmlns:control="com.partycommittee.control.*" 
+		   xmlns:views="com.partycommittee.views.*" 
+		   xmlns:agencymgmt="com.partycommittee.views.agencymgmt.*" 
+		   xmlns:stats="com.partycommittee.views.stats.*" 
+		   xmlns:sysmgmt="com.partycommittee.views.sysmgmt.*"
+		   horizontalScrollPolicy="auto"
+		   verticalScrollPolicy="auto" 
+		   xmlns:mainmenu="com.partycommittee.control.mainmenu.*" 
+		   xmlns:button="com.partycommittee.control.button.*">
+    
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.AccordionItemClickEvent;
+			import com.partycommittee.events.MenuEvent;
+			import com.partycommittee.events.PcUserEvent;
+			import com.partycommittee.manager.navigation.NavigationMgr;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.views.sysmgmt.systemviews.PwEditWindow;
+			
+			import mx.collections.XMLListCollection;
+			import mx.controls.Alert;
+			import mx.events.IndexChangedEvent;
+			
+			[Bindable]
+			private var menuData:Array = [
+				{label:'组织管理', children:[
+					{id:'orgManage', label:'基本情况', navView:'orgView'},
+					{id:'partyMemberManage', label:'支委管理', navView:'orgView'}
+				], menuEvent:false},
+				{label:'组织生活', children:[
+					{id:'browseReport', label:'浏览', navView:'browseWorkplanView'},
+					{id:'inputReport', label:'填报', navView:'agencyActivityView'}
+				], menuEvent:false},
+				{label:'统计分析', children:[
+				], menuEvent:false, enable:false},
+				{label:'系统管理', children:[
+					{id:'accountManage', label:'账户管理', navView:'accountView'},
+				], menuEvent:false},
+			];
+			
+			[Bindable]
+			public var model:ModelLocator = ModelLocator.getInstance();
+			
+			private function onCreationCompleted():void {
+				scrollCav.mainMenu.dataProvider = mainContainer.mainViewStack;
+//				this.addEventListener(AccordionItemClickEvent.ITEM_CLICK, onAccordionItemClick);
+//				this.mainMenu.addEventListener(MenuEvent.ITEM_CLICK, onMenuItemClick);
+				mainContainer.mainViewStack.addEventListener(IndexChangedEvent.CHANGE, onPageChanged);
+			}
+			
+			private function onPageChanged(event:IndexChangedEvent):void {
+//				scrollCav.updateNavigateBar(event.relatedObject);
+			}
+			
+			private function onMenuItemClick(event:MenuEvent):void {
+				model.selectedMenu = event.item;
+				if (!event.item || !event.item.hasOwnProperty("navView")) {
+					return;
+				}
+				NavigationMgr.getInstance().navigateToView(event.item["navView"]);
+			}
+			
+//			private function onAccordionItemClick(event:AccordionItemClickEvent):void {
+//				model.selectedMenu = event.item;
+//				onDividerPress();
+//				if (!event.item || !event.item.hasOwnProperty("navView")) {
+//					return;
+//				}
+//				NavigationMgr.getInstance().navigateToView(event.item["navView"]);
+//			}
+			
+//			private var isAccordionMin:Boolean = false;
+//			public function onDividerPress():void {
+//				if (isAccordionMin) {
+//					accordionView.width = 180;
+//					isAccordionMin = false;
+//				} else {
+//					accordionView.width = 0;
+//					isAccordionMin = true;
+//				}
+//			}
+			
+		]]>
+    </fx:Script>
+	
+	<mx:constraintRows>
+		<s:ConstraintRow id="headerRow" height="125"/>
+		<s:ConstraintRow id="mainRow" height="100%"/>
+		<s:ConstraintRow id="bottomGap" height="2"/>
+	</mx:constraintRows>
+	
+	<mx:HDividedBox top="mainRow:0" bottom="mainRow:0"
+			width="100%">
+		<!--
+		<mx:Accordion id="accordionView" height="100%" width="180" headerHeight="30" headerStyleName="accrodionHeader" >
+			<agencymgmt:AgencyManageList width="100%" height="100%"/>
+			<agencymgmt:AgencyActivityList width="100%" height="100%"/>
+			<stats:StatsList width="100%" height="100%"/>
+			<sysmgmt:SystemList width="100%" height="100%"/>
+		</mx:Accordion>
+		-->
+		<mx:VBox width="100%" height="100%">
+			<control:ScrollCanvas id="scrollCav" width="100%"/>
+			<views:MainContainer id="mainContainer" width="100%" height="100%"
+								 borderColor="#000000" borderStyle="solid"
+								 borderVisible="true"/>
+		</mx:VBox>
+	</mx:HDividedBox>
+	<s:BorderContainer backgroundImage="{EmbedResources.topBImg}"
+					   backgroundImageFillMode="scale"
+					   width="100%"
+					   borderVisible="false"> 		
+		<mx:Canvas top="headerRow:0" bottom="headerRow:0"
+				   width="100%">
+				<mx:Image source="{EmbedResources.topBannerImg}"/>
+
+			
+			<!--
+			<mx:HBox right="10" bottom="38" cornerRadius="5"
+					 backgroundColor="0xffffff" backgroundAlpha="1">
+				<mx:Label text="{'当前登录用户：' + (model.loginUser ? model.loginUser.username : '')}"
+						  fontWeight="bold"/>
+				<mx:Text htmlText="{updatePwTxt}" link="updatePwHandler(event)" fontWeight="bold"
+						 useHandCursor="true" buttonMode="true"/>
+				<mx:Text htmlText="{logoffTxt}" link="onLogout(event)" fontWeight="bold"
+						 useHandCursor="true" buttonMode="true"/>
+			</mx:HBox>
+			-->
+			
+			<!--
+			<mainmenu:MainMenu id="mainMenu" menuData="{menuData}" itemGap="5"
+							   right="5" bottom="0"/>
+			-->
+		</mx:Canvas>
+	</s:BorderContainer>
+	
+</mx:Canvas>

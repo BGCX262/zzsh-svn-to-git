@@ -1,0 +1,221 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						   xmlns:s="library://ns.adobe.com/flex/spark" 
+						   xmlns:mx="library://ns.adobe.com/flex/mx"
+						   styleName="mainCanvas"
+						   width="100%" height="100%" 
+						   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+						   creationComplete="onCreationCompleted()"
+						   xmlns:component="com.partycommittee.views.agencymgmt.component.*">
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.MeetingListView;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.QuarterWorkPlanListView;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.QuarterWorkPlanView;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.YearSummaryView;
+			import com.partycommittee.views.agencymgmt.agencyactivity.workplan.YearWorkPlanView;
+			import com.partycommittee.vo.PcAgencyVo;
+			
+			import mx.containers.Canvas;
+			import mx.controls.ComboBox;
+			import mx.events.ListEvent;
+			import mx.events.PropertyChangeEvent;
+			
+			public var yearCmb:ComboBox;
+			
+			[Bindable]
+			public var enableReport:Boolean = true;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			private var _agency:PcAgencyVo;
+
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			
+			private var _toIndex:int;
+
+			public function get toIndex():int
+			{
+				return _toIndex;
+			}
+			
+			public function set toIndex(value:int):void
+			{
+				_toIndex = value;
+			}			
+			
+			public function onCreationCompleted():void {
+				onNavigateIn();
+				if (yearCmb) {
+					yearCmb.dataProvider = DataproviderFactory.getRangeYearForReport();
+					yearCmb.selectedItem = model.reportYear = DateUtilExt.now().getFullYear();
+					yearCmb.addEventListener(Event.CHANGE, onYearCmbChanged);
+				}
+				
+				if (toIndex > 0) {
+					tab.selectedIndex = toIndex;
+					toIndex = 0;
+				}
+			}
+			
+			override protected function onNavigateIn():void {
+				if (agency != model.focusAgencyVo) {
+					agency = model.focusAgencyVo;
+					updateData();
+				}
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+			}
+			
+			override protected function onNavigateOut():void {
+				model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+			}
+			
+			private function onModelChanged(event:PropertyChangeEvent):void {
+				if (event.property == "focusAgencyVo") {
+					agency = model.focusAgencyVo;
+					updateData();
+				}
+			}
+			
+			public function updateData():void {
+				if (!this._agency) {
+					return;
+				}
+				tab.removeAll();
+				
+				var yearWorkPlan:YearWorkPlanView = new YearWorkPlanView();
+				yearWorkPlan.agency = agency;
+				yearWorkPlan.percentHeight = 100;
+				yearWorkPlan.percentWidth = 100;
+				yearWorkPlan.browseMode = !enableReport;
+				yearWorkPlan.tab = this.tab;
+				tab.addChild(yearWorkPlan);
+				
+				var quarterWorkPlanList:QuarterWorkPlanListView = new QuarterWorkPlanListView();
+				quarterWorkPlanList.label = "季度工作计划";
+				quarterWorkPlanList.agency = agency;
+				quarterWorkPlanList.type = QuarterWorkPlanListView.TYPE_WORKPLAN;
+				quarterWorkPlanList.percentHeight = 100;
+				quarterWorkPlanList.percentWidth = 100;
+				quarterWorkPlanList.browseMode = !enableReport;
+				quarterWorkPlanList.tab = this.tab;
+				tab.addChild(quarterWorkPlanList);
+				
+				var quarterWorkPlanResultList:QuarterWorkPlanListView = new QuarterWorkPlanListView();
+				quarterWorkPlanResultList.label = "季度执行情况";
+				quarterWorkPlanResultList.type = QuarterWorkPlanListView.TYPE_RESULT;
+				quarterWorkPlanResultList.agency = agency;
+				quarterWorkPlanResultList.percentHeight = 100;
+				quarterWorkPlanResultList.percentWidth = 100;
+				quarterWorkPlanResultList.browseMode = !enableReport;
+				quarterWorkPlanResultList.tab = this.tab;
+				tab.addChild(quarterWorkPlanResultList);
+				
+				var classMeetingView:MeetingListView = new MeetingListView();
+				classMeetingView.label = "党课";
+				classMeetingView.type = PCConst.WORKPLAN_TYPE_CLASS;
+				classMeetingView.agency = agency;
+				classMeetingView.percentHeight = 100;
+				classMeetingView.percentWidth = 100;
+				classMeetingView.browseMode = !enableReport;
+				classMeetingView.tab = this.tab;
+				tab.addChild(classMeetingView);
+				
+				var branchMemberMeeting:MeetingListView = new MeetingListView();
+				branchMemberMeeting.label = "支部党员大会";
+				branchMemberMeeting.type = PCConst.WORKPLAN_TYPE_MEETING_BRANCH_MEMBER;
+				branchMemberMeeting.agency = agency;
+				branchMemberMeeting.percentHeight = 100;
+				branchMemberMeeting.percentWidth = 100;
+				branchMemberMeeting.browseMode = !enableReport;
+				branchMemberMeeting.tab = this.tab;
+				tab.addChild(branchMemberMeeting);
+				
+				var branchCommitteeMeeting:MeetingListView = new MeetingListView();
+				branchCommitteeMeeting.label = "支部委员会";
+				branchCommitteeMeeting.type = PCConst.WORKPLAN_TYPE_MEETING_BRANCH_COMMITTEE;
+				branchCommitteeMeeting.agency = agency;
+				branchCommitteeMeeting.percentHeight = 100;
+				branchCommitteeMeeting.percentWidth = 100;
+				branchCommitteeMeeting.browseMode = !enableReport;
+				branchCommitteeMeeting.tab = this.tab;
+				tab.addChild(branchCommitteeMeeting);
+				
+				var branchLifeMeeting:MeetingListView = new MeetingListView();
+				branchLifeMeeting.label = "支部民主生活会";
+				branchLifeMeeting.type = PCConst.WORKPLAN_TYPE_MEETING_BRANCH_LIFE;
+				branchLifeMeeting.agency = agency;
+				branchLifeMeeting.percentHeight = 100;
+				branchLifeMeeting.percentWidth = 100;
+				branchLifeMeeting.browseMode = !enableReport;
+				branchLifeMeeting.tab = this.tab;
+				tab.addChild(branchLifeMeeting);
+				
+//				var teamMeeting:MeetingListView = new MeetingListView();
+//				teamMeeting.label = "党小组会";
+//				teamMeeting.type = PCConst.WORKPLAN_TYPE_MEETING_TEAM;
+//				teamMeeting.agency = agency;
+//				teamMeeting.percentHeight = 100;
+//				teamMeeting.percentWidth = 100;
+//				tab.addChild(teamMeeting);
+				
+				var otherMeeting:MeetingListView = new MeetingListView();
+				otherMeeting.label = "其他";
+				otherMeeting.type = PCConst.WORKPLAN_TYPE_MEETING_OTHER;
+				otherMeeting.agency = agency;
+				otherMeeting.percentHeight = 100;
+				otherMeeting.percentWidth = 100;
+				otherMeeting.browseMode = !enableReport;
+				otherMeeting.tab = this.tab;
+				tab.addChild(otherMeeting);
+				
+				var yearlySummary:YearSummaryView = new YearSummaryView();
+				yearlySummary.label = "年终总结";
+				yearlySummary.agency = agency;
+				yearlySummary.percentHeight = 100;
+				yearlySummary.percentWidth = 100;
+				yearlySummary.browseMode = !enableReport;
+				yearlySummary.tab = this.tab;
+				tab.addChild(yearlySummary);
+				
+				switch (this._agency.codeId) {
+					case PCConst.AGENCY_CODE_BASICCOMMITTEES:
+						break;
+					case PCConst.AGENCY_CODE_BRANCH:
+						break;
+					case PCConst.AGENCY_CODE_FIRSTBRANCH:
+						break;
+					case PCConst.AGENCY_CODE_GANERALBRANCH:
+						break;
+					case PCConst.AGENCY_CODE_TEAM:
+						break;
+				}
+
+			}
+			
+			private function onYearCmbChanged(event:Event):void {
+				model.reportYear = yearCmb.selectedItem as Number;
+				updateData();
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:TabNavigator id="tab" width="100%" height="100%">
+	</mx:TabNavigator>
+	
+</navigation:NavigationView>

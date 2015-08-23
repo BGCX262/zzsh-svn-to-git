@@ -1,0 +1,59 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView xmlns:fx="http://ns.adobe.com/mxml/2009" 
+						   xmlns:s="library://ns.adobe.com/flex/spark" 
+						   xmlns:mx="library://ns.adobe.com/flex/mx"
+						   styleName="mainCanvas"
+						   width="100%" height="100%" 
+						   creationComplete="onCreationCompleted()"
+						   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+						   xmlns:systemviews="com.partycommittee.views.sysmgmt.systemviews.*"
+						   >
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.views.MainContainer;
+			
+			import mx.events.PropertyChangeEvent;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			private var _toIndex:int;
+			
+			public function get toIndex():int
+			{
+				return _toIndex;
+			}
+			
+			public function set toIndex(value:int):void
+			{
+				_toIndex = value;
+			}
+			
+			private function onCreationCompleted():void {
+
+			}
+			
+
+						
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:TabNavigator id="tab" width="100%" height="100%">
+		<systemviews:AccountManageView id="accountView" width="100%" height="100%" 
+									   label="账号管理" tab="{this.tab}"/>
+		<systemviews:RemindConfigView id="remindconfigView" width="100%" height="100%" 
+									  label="提醒设定" tab="{this.tab}"/>
+		<systemviews:RemindLockView id="remindLockView" width="100%" height="100%" 
+									label="解锁" tab="{this.tab}"/>
+		<systemviews:BulletinView id="bulletinView" width="100%" height="100%" 
+									label="公告管理" tab="{this.tab}"/>
+		<systemviews:BackupView id="backupView" width="100%" height="100%" 
+								  label="数据备份" tab="{this.tab}"/>	
+		<systemviews:LicenseView id="licenseView" width="100%" height="100%" 
+								label="版权" tab="{this.tab}"/>		
+	</mx:TabNavigator>
+</navigation:NavigationView>

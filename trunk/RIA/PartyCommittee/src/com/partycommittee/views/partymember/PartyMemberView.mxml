@@ -1,0 +1,238 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx"
+		   styleName="mainCanvas"
+		   width="100%" height="100%" 
+		   xmlns:button="com.partycommittee.control.button.*" 
+		   xmlns:datagrid="com.partycommittee.control.datagrid.*"
+		   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+		   xmlns:pagebar="com.partycommittee.control.pagebar.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcMemberEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.LblFunctionHelper;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcMeetingVo;
+			import com.partycommittee.vo.PcMemberVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			import com.partycommittee.vo.page.PageResultVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.DataGrid;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			private var _editEnable:Boolean = true;
+			[Bindable]
+			public function get editEnable():Boolean {
+				return this._editEnable;
+			}
+			public function set editEnable(value:Boolean):void {
+				this._editEnable = value;
+			}
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			private var dp:ArrayCollection = new ArrayCollection();
+			
+			private var _agency:PcAgencyVo;
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+			}
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			
+			private var _page:PageHelperVo;
+			[Bindable]
+			public function get page():PageHelperVo {
+				if (!this._page) {
+					this._page = new PageHelperVo();
+				}
+				return this._page;
+			}
+			public function set page(value:PageHelperVo):void {
+				this._page = value;
+			}
+			
+			public function updateData():void {
+				if (!agency) {
+					return;
+				}
+				refreshData();
+			}
+			
+			private function refreshData():void {
+				var memberEvent:PcMemberEvent = new PcMemberEvent(PcMemberEvent.GET_MEMBERS_BY_AGENCYID, 
+					null, agency.id);
+				memberEvent.page = page;
+				memberEvent.successCallback = onRefreshMembers;
+				memberEvent.dispatch();
+			}
+			
+			private function onRefreshMembers(data:Object, event:PcMemberEvent):void {
+				dp = data as ArrayCollection;
+//				var pageResult:PageResultVo = data as PageResultVo;
+//				if (!pageResult) {
+//					return;
+//				}
+//				page = pageResult.page;
+//				dp = pageResult.list;
+			}
+			
+			private function addMember():void {
+				if (!agency) {
+					return;
+				}
+				var window:PartyMemberWindow = new PartyMemberWindow();
+				window.parentView = this;
+				PopupMgr.instance.popupWindow(window);
+			}
+			
+			private function updateMember():void {
+				var window:PartyMemberWindow = new PartyMemberWindow();
+				window.type = CRUDEventType.UPDATE;
+				window.parentView = this;
+				
+
+				window.title = "修改支委委员";
+				window.memberVo = datagrid. selectedItem as PcMemberVo;
+				// 党支部登录或者是本身的党委可以修改
+				window.editEnable = editEnable;
+				
+				PopupMgr.instance.popupWindow(window);
+			}
+			
+			private function onItemDoubleClick():void {
+				updateMember();
+			}
+			
+			private var deleteMemberList:ArrayCollection = new ArrayCollection();
+			private function deleteMember():void {
+				deleteMemberList = new ArrayCollection(datagrid.selectedItems);
+				Alert.show("确定删除【" + getSelectedNames().join(", ") + "】？", "提示", 
+					Alert.YES | Alert.NO, FlexGlobals.topLevelApplication.root, onDeleteAlertClose);
+			}
+			
+			private function getSelectedNames():Array {
+				var nameList:Array = new Array();
+				for each (var memberItem:PcMemberVo in deleteMemberList) {
+					nameList.push(memberItem.name);
+				}
+				return nameList;
+			}
+			
+			private function onDeleteAlertClose(event:CloseEvent):void {
+				if (event.detail == Alert.YES) {
+					doDelete();
+				}
+			}
+			
+			private function doDelete():void {
+				var memberEvt:PcMemberEvent = new PcMemberEvent(CRUDEventType.DELETE, null, 0, deleteMemberList);
+				memberEvt.successCallback = onDeleteMemberSuccess;
+				memberEvt.failureCallback = onDeleteMemberFailure;
+				this.enabled = false;
+				memberEvt.dispatch();
+			}
+			
+			private function onDeleteMemberSuccess(data:Object, evt:PcMemberEvent):void {
+				this.enabled = true;
+				updateData();
+			}
+			
+			private function onDeleteMemberFailure(info:Object, evt:PcMemberEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+			private function onExportToExcel():void {
+				var memberEvt:PcMemberEvent = new PcMemberEvent(PcMemberEvent.EXPORT_MEMBERS_TO_EXCEL, null, agency.id);
+				
+				memberEvt.successCallback = onExportMemberSuccess;
+				memberEvt.failureCallback = onExportMemberPlanFailure;	
+				
+				exportBtn.enabled = false;
+				memberEvt.dispatch();
+			}		
+			
+			private function onExportMemberSuccess(data:Object, memberEvt:PcMemberEvent):void {
+				exportBtn.enabled = true;
+				var filename = data as String;
+				var url = 'tmp/' + filename;
+				var u:URLRequest = new URLRequest(url);
+				u.method = URLRequestMethod.GET;   
+				navigateToURL(u,"_self");
+			}	
+			
+			private function onExportMemberPlanFailure(data:Object, memberEvt:PcMemberEvent):void {
+				exportBtn.enabled = true;
+			}				
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:ControlBar width="100%" horizontalAlign="right"
+					   visible="{editEnable}" includeInLayout="{editEnable}">
+			<button:PcButton label="增加" click="addMember()"/>
+			<button:PcButton label="修改" click="updateMember()" enabled="{datagrid.selectedItem}"/>
+			<button:PcButton label="删除" click="deleteMember()" enabled="{datagrid.selectedItem}"/>
+		</mx:ControlBar>
+		<mx:AdvancedDataGrid id="datagrid" width="100%" height="100%" 
+										   headerStyleName="dataGridHeader"
+										   allowMultipleSelection="true"
+										   dataProvider="{dp}" lockedColumnCount="2"
+										   horizontalScrollPolicy="auto"
+										   doubleClickEnabled="true"
+										   doubleClick="onItemDoubleClick()">
+			<mx:columns>
+				<mx:AdvancedDataGridColumn headerText="序号" dataField="sort" width="60"/>
+				<mx:AdvancedDataGridColumn headerText="姓名" dataField="name" width="120"/>
+				<mx:AdvancedDataGridColumn headerText="党内职务" dataField="dutyId" width="120"
+										   labelFunction="{LblFunctionHelper.memberDutyLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="性别" dataField="sexId" width="80"
+										   labelFunction="{LblFunctionHelper.memberSexLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="民族" dataField="nation" width="80"
+										   labelFunction="{LblFunctionHelper.memberNationLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="出生年月" dataField="birthday" width="120"
+										   labelFunction="{LblFunctionHelper.dateLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="参加工作时间" dataField="workday" width="150"
+										   labelFunction="{LblFunctionHelper.dateLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="入党时间" dataField="joinday" width="120"
+										   labelFunction="{LblFunctionHelper.dateLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="文化程度" dataField="joinday" width="120"
+										   labelFunction="{LblFunctionHelper.memberEduLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="任党内职务时间" dataField="postday" width="120"
+										   labelFunction="{LblFunctionHelper.dateLblFunc}"/>
+			</mx:columns>
+		</mx:AdvancedDataGrid>
+		
+		<mx:ControlBar width="100%" horizontalAlign="right">
+			<pagebar:PageBar page="{page}" width="100%" enabled="false"/>
+			<button:PcButton id="exportBtn" label="导出Excel" click="onExportToExcel()"/>
+			<!--
+			<button:PcButton label="下载Excel模板"/>
+			<button:PcButton label="上传党员Excel"/>
+			<button:PcButton label="生成Excel"/>
+			-->
+		</mx:ControlBar>
+		
+	</mx:VBox>
+	
+</mx:Canvas>

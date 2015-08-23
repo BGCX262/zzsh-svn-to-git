@@ -1,0 +1,146 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView  xmlns:fx="http://ns.adobe.com/mxml/2009" 
+							xmlns:s="library://ns.adobe.com/flex/spark" 
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							styleName="mainCanvas"
+							width="100%" height="100%" 
+							xmlns:button="com.partycommittee.control.button.*" 
+							xmlns:navigation="com.partycommittee.manager.navigation.*" 
+							xmlns:local="*"
+							creationComplete="onCreationCompleted()">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.lnczx.utils.ExportExcel;
+			import com.lnczx.utils.ExportExcelExtend;
+			import com.partycommittee.events.PcParentStatEvent;
+			import com.partycommittee.events.PcStatEvent;
+			import com.partycommittee.events.PcWordEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.LblFunctionHelper;
+			import com.partycommittee.vo.PcAgencyVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.controls.DataGrid;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+
+			
+			private function onCreationCompleted():void {
+				if (yearCmb) {
+					yearCmb.dataProvider = DataproviderFactory.getRangeYearForReport();
+					yearCmb.selectedItem = model.reportYear = DateUtilExt.now().getFullYear();
+				}
+				
+				var htmltext:String = "<p align=\"center\"><font size=\"20\"><b>                \"党支部工作手册\"使用说明</b></font></p>"; 
+				htmltext += "<br>";
+				htmltext += "<br>";
+				htmltext += "<p align=\"left\"><font size=\"14\" >  一、为加强基层党支部建设,提高党支部组织生活制度化、规范化、科学化水平,加强党员的管理教育,更好地发挥党支部的战半堡垒作用和党员的先锋模范作用,特制定\"党支部工作手册\"</font></p>";
+				htmltext += "<br>";
+				htmltext += "<p align=\"left\"><font size=\"14\" >  二、各基层党委（总支）要加强对党支部工作和组织生活的管理、检查和指导，并以\"党支部工作手册\"作为衡量党支部工作情况的重要依据。</font></p>";
+				htmltext += "<br>";
+				htmltext += "<p align=\"left\"><font size=\"14\" >  三、本手册每年一册，由专人负责，及时填写，妥善保存。</font></p>";
+				htmltext += "<br>";
+				htmltext += "<p align=\"left\"><font size=\"14\" >  四、有些项目填写内容较多，表格内填不下时，可另附纸页。</font></p>";
+				htmltext += "<br>";
+				htmltext += "<p align=\"left\"><font size=\"14\" >  五、基层党委（总支）每年要对所属党支部的工作进行一次全面检查，实事求是地作出评价，并填入手册。</font></p>";
+				
+				ex.htmlText = htmltext;
+
+			}
+
+			private function onExportAllToDoc():void {
+				//				Alert.show("onExportAllToDoc");
+				if (model.focusAgencyVo.codeId != 10) {
+					Alert.show("请选择一个党支部打印工作手册");
+					
+				} else {
+				
+				
+					var evt:PcWordEvent = new PcWordEvent(PcWordEvent.EXPORT_WORD_ALL);
+					evt.agencyId = model.focusAgencyVo.id;
+					evt.year = yearCmb.selectedItem as Number;
+					evt.successCallback = onExportWordAllSuccess;
+					evt.failureCallback = onExportWordAllFailure;
+					
+					export_btn.enabled = false;
+					evt.dispatch();
+				}
+			}		
+			
+			private function onExportWordAllSuccess(data:Object, evt:PcWordEvent):void {
+				export_btn.enabled = true;
+				var str = data as String;
+				
+				if (!str) return;
+				var results:Array = str.split('--');
+				
+				var p_name:String = results[0].toString();
+				var filename:String = results[1].toString();
+				var url = "wordExport.jsp";				
+				var variables:URLVariables = new URLVariables();
+				
+				var p:PcAgencyVo = model.focusAgencyVo as PcAgencyVo;
+				
+				var zb_name = model.focusAgencyVo.name;
+
+				var title:String = p_name + "-" + zb_name + "-" + yearCmb.selectedItem.toString() + "年度党支部工作手册";
+				variables.filename = filename;
+				variables.title = encodeURIComponent(title);
+				var u:URLRequest = new URLRequest(url);   
+				u.data = variables;   
+				u.method = URLRequestMethod.POST;
+				navigateToURL(u,"_self");
+			}
+			
+			private function onExportWordAllFailure(info:Object, evt:PcWordEvent):void {
+				//				Alert.show("onExportWordAllFailure");
+				export_btn.enabled = true;
+			}					
+			
+			
+
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		
+		<mx:HBox width="100%" height="100%" horizontalAlign="center" verticalAlign="middle">
+			<mx:TextArea id="ex" width="600" height="100%" >
+				
+			</mx:TextArea>
+		</mx:HBox>	
+
+		<mx:HBox width="100%" height="30%" horizontalAlign="center" verticalAlign="top">		
+			<mx:Label text="选择年份:"/>
+			<mx:ComboBox id="yearCmb"/>
+			<mx:Button id="export_btn" label="打印年度工作手册" click="onExportAllToDoc()"/>
+		</mx:HBox>		
+		
+		
+		
+
+		
+	</mx:VBox>
+	
+</navigation:NavigationView>

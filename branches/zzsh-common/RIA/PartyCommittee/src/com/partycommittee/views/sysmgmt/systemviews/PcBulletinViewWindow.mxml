@@ -1,0 +1,86 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" 
+					  title="" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  width="600" height="600"
+					  horizontalScrollPolicy="off" verticalScrollPolicy="off"
+					  xmlns:button="com.partycommittee.control.button.*"
+					  creationComplete="onCreationCompleted()">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcUserEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.vo.PcBulletinVo;
+			import com.partycommittee.vo.PcUserVo;
+			
+			import mx.controls.Alert;
+			import mx.utils.ObjectUtil;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+
+			private var _bulletinVo:PcBulletinVo;
+			
+			[Bindable]
+			public function get bulletinVo():PcBulletinVo {
+				return this._bulletinVo;
+			}
+			public function set bulletinVo(value:PcBulletinVo):void {
+				this._bulletinVo = value;
+			}
+			
+			private function onCreationCompleted():void {
+				
+				updateData();
+			}
+			
+			private function updateData():void {
+				if (!this._bulletinVo) {
+					return;
+				}
+				titleTxt.text = bulletinVo.title ;
+				textArea.htmlText = bulletinVo.content;
+				isIndexCk.selected =  bulletinVo.isIndex == 1 ? true : false;
+				expireTime.selectedDate = bulletinVo.expireTime;
+			}			
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox height="100%" width="100%"
+			 horizontalAlign="center" verticalAlign="middle"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:Form width="600" height="100%"
+				 minWidth="200"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:FormItem label="标题:" width="100%">
+				<mx:TextInput id="titleTxt"  maxChars="50"/>
+			</mx:FormItem>
+			<mx:FormItem label="内容:" width="100%" height="100%">
+				<mx:TextArea id="textArea" width="100%" height="100%"/>
+			</mx:FormItem>
+			<mx:FormItem label="发布到首页:" required="true" width="100%">
+				<mx:CheckBox id="isIndexCk"/>
+			</mx:FormItem>
+			<mx:FormItem label="过期时间:" width="100%">
+				<mx:DateField id="expireTime" width="100%" selectedDate="{new Date()}"
+							  formatString="YYYY-MM-DD"/>
+			</mx:FormItem>
+		</mx:Form>
+		<mx:ControlBar width="100%" horizontalAlign="center">
+			<button:PcButton label="关闭" click="close()"/>
+		</mx:ControlBar>
+	</mx:VBox>	
+	
+	
+</control:EscapeWindow>

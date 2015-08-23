@@ -1,0 +1,153 @@
+<?xml version="1.0" encoding="utf-8"?>
+<control:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					  xmlns:s="library://ns.adobe.com/flex/spark" 
+					  xmlns:mx="library://ns.adobe.com/flex/mx" 
+					  xmlns:control="com.partycommittee.control.*"
+					  horizontalAlign="center" verticalAlign="middle"
+					  showCloseButton="true" titleStyleName="panelTitle"
+					  close="PopupMgr.instance.removeWindow(this)" 
+					  height="650" width="500"
+					  creationComplete="onCreationCompleted()"
+					  xmlns:button="com.partycommittee.control.button.*" 
+					  xmlns:richtexttoolbar="com.partycommittee.control.richtexttoolbar.*">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcMeetingEvent;
+			import com.partycommittee.events.PcWorkPlanEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.util.DateUtil;
+			import com.partycommittee.vo.PcMeetingContentVo;
+			import com.partycommittee.vo.PcMeetingVo;
+			import com.partycommittee.vo.PcWorkPlanContentVo;
+			import com.partycommittee.vo.PcWorkPlanVo;
+			
+			import flashx.textLayout.debug.assert;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			
+			private var isWorkPlan:Boolean = false;
+			
+			private var _meeting:PcMeetingVo;
+			[Bindable]
+			public function get meeting():PcMeetingVo {
+				return this._meeting;
+			}
+			public function set meeting(value:PcMeetingVo):void {
+				this._meeting = value;
+			}
+			
+			private var _workPlan:PcWorkPlanVo;
+			[Bindable]
+			public function get workPlan():PcWorkPlanVo {
+				return this._workPlan;
+			}
+			public function set workPlan(value:PcWorkPlanVo):void {
+				this._workPlan = value;
+			}
+			
+			private function onCreationCompleted():void {
+				updateData();
+			}
+			
+			private function updateData():void {
+				var isApproval:Boolean = false;
+				if (workPlan) {
+					if (workPlan.typeId == PCConst.WORKPLAN_TYPE_QUARTER || 
+						workPlan.typeId == PCConst.WORKPLAN_TYPE_YEARLY) {
+						isApproval = true;
+					}
+					getEvaluateInfo();
+				}
+				if (meeting) {
+					getMeetingComment();
+				}
+				
+
+				this.title = "查看上级评语";
+				this.personLbl.text = "评语主题：";
+				this.dateLbl.text = "评语日期：";
+			}
+			
+			private function getEvaluateInfo():void {
+				var workPlanEvt:PcWorkPlanEvent = new PcWorkPlanEvent(PcWorkPlanEvent.GET_CONTENT_INFO);
+				workPlanEvt.workPlan = workPlan;
+				workPlanEvt.contentType = 3;
+				workPlanEvt.successCallback = onGetEvaluateInfoSuccess;
+				workPlanEvt.failureCallback = onGetEvaluateInfoFailure;
+				this.enabled = false;
+				workPlanEvt.dispatch();
+			}
+			
+			private function onGetEvaluateInfoSuccess(data:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				var workplanContent:PcWorkPlanContentVo = data as PcWorkPlanContentVo;
+				if (!workplanContent) {
+					return;
+				}
+				textArea.htmlText = workplanContent.content;
+				personTxt.text = workplanContent.memberName;
+				dateTxt.text = DateUtil.toISOString(workplanContent.updatetime, false);
+			}
+			
+			private function onGetEvaluateInfoFailure(info:Object, evt:PcWorkPlanEvent):void {
+				this.enabled = true;
+				Alert.show("获取内容失败！");
+			}
+			
+			private function getMeetingComment():void {
+				var meetingEvt:PcMeetingEvent = new PcMeetingEvent(PcMeetingEvent.GET_MEETING_COMMENT);
+				meetingEvt.meeting = meeting;
+				meetingEvt.successCallback = onGetMeetingCommentSuccess;
+				meetingEvt.failureCallback = onGetMeetingCommentFailure;
+				this.enabled = false;
+				meetingEvt.dispatch();
+			}
+			
+			private function onGetMeetingCommentSuccess(data:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				var meetingContent:PcMeetingContentVo = data as PcMeetingContentVo;
+				if (!meetingContent) {
+					return;
+				}
+				textArea.htmlText = meetingContent.content;
+				personTxt.text = meetingContent.memberName;
+				dateTxt.text = DateUtil.toISOString(meetingContent.updatetime);
+			}
+			
+			private function onGetMeetingCommentFailure(info:Object, evt:PcMeetingEvent):void {
+				this.enabled = true;
+				Alert.show("获取内容失败！");
+			}
+			
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 left="6" right="6" top="6" bottom="6"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:VBox width="100%" height="100%"
+				 verticalGap="0"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:TextArea id="textArea" width="100%" height="100%"
+						 editable="false"/>
+		</mx:VBox>
+		<mx:HBox width="100%"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label id="personLbl" width="75"/>
+			<mx:TextInput id="personTxt" width="100%" editable="false"/>
+		</mx:HBox>
+		<mx:HBox width="100%"
+				 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+			<mx:Label id="dateLbl" width="75"/>
+			<mx:TextInput id="dateTxt" width="100%" editable="false"/>
+		</mx:HBox>
+		<mx:ControlBar width="100%" horizontalAlign="center" verticalAlign="middle">
+			<button:PcButton label="关闭" click="close()"/>
+		</mx:ControlBar>
+	</mx:VBox>
+	
+</control:EscapeWindow>

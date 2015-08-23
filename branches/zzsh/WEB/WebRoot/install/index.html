@@ -1,0 +1,67 @@
+<!DOCTYPE html PUBLIC "-//W3C//DTD XHTML 1.0 Transitional//EN" "http://www.w3.org/TR/xhtml1/DTD/xhtml1-transitional.dtd">
+<html xmlns="http://www.w3.org/1999/xhtml">
+<head>
+<meta http-equiv="Content-Type" content="text/html; charset=utf-8" />
+<title>许可协议--基层党支部组织生活管理系统安装向导</title>
+<link href="img/style.css" type="text/css" rel="stylesheet"/>
+
+<script type="text/javascript">
+function formSubmit() {
+	if(document.getElementById('license_agree').checked==false){
+		alert('请同意我们的协议');
+		return false;
+	}
+	document.getElementById('license_form').submit();
+}
+</script>
+</head>
+
+<body>
+
+
+<div class="regist-header box">
+  <div class="rgheader box">
+         <div class="brand fl">
+            <h1 style="margin:0px;"></h1>
+         </div>
+     </div>
+</div>
+<div class="main">
+  <table width="980" border="0" align="center" cellpadding="0" cellspacing="0" class="rg-tbg">
+    <tr>
+      <td height="76" align="center"><h2>1、用户许可协议</h2>
+	  <span style="color:#016dd0;">欢迎使用，安装前请仔细阅读以下用户许可协议：</span></td>
+    </tr>
+    <tr>
+      <td>
+	  <table width="600" border="0" align="center" cellpadding="0" cellspacing="0" >
+  
+  <tr>
+    <td height="300">
+	<textarea name="textarea" cols="82" rows="23">                            --==用户许可协议==--
+	
+  
+    </textarea></td>
+  </tr>
+  <tr>
+    <td align="right">
+	<form id="license_form" action="install_params.jsp" method="post">
+	<table width="200" border="0" align="center" cellpadding="0" cellspacing="0">
+      <tr>
+        <td width="27" height="30" align="center"><input type="checkbox" id="license_agree" name="license_agree"/></td>
+        <td width="273" align="left">我已经阅读并同意此协议</td>
+        </tr>
+      <tr>
+        <td height="30" colspan="2" align="center"><input type="button" class="regist-submit" onclick="formSubmit();" value=" 下一步 " /></td>
+        </tr>
+    </table>
+	</form>	</td>
+  </tr>
+</table>	  </td>
+    </tr>
+  </table>
+</div>
+
+
+</body>
+</html>

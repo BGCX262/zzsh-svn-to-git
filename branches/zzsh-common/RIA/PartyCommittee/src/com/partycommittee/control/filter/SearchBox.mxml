@@ -1,0 +1,308 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:mx="http://www.adobe.com/2006/mxml"
+         xmlns:vmware="http://www.vmware.com/flex-widgets"
+         horizontalScrollPolicy="off"
+         styleName="lightSearchComponent"
+         width="250" height="24"
+         creationComplete="{init()}"
+         currentState="normal">
+
+   <mx:Metadata>
+      [Event(name="filteringComplete", type="flash.events.Event")]
+   </mx:Metadata>
+
+   <mx:Script>
+      <![CDATA[
+         import mx.collections.ArrayCollection;
+         import mx.events.CollectionEvent;
+         import mx.managers.PopUpManager;
+         import mx.utils.StringUtil;
+
+         [Bindable]
+         /**
+          * Data for filtering, always the dataProvider of its related data-grid.
+          */
+         public var dataProvider:ArrayCollection;
+
+         /**
+          * Indicate whether the default search function will be case sensitive
+          */
+         public var caseSensitive:Boolean = false;
+
+         private var _filterDataProvider:ArrayCollection;
+         [Bindable]
+         /**
+          * Columns show in the data-grid, filtering criterions. The data should have
+          * below format:
+          * <pre>
+          * var filterDataProvider:ArrayCollection = new ArrayCollection([
+          *  {label:"column1", value:"name", flag:true},
+          *  {label:"column2", value:"description", flag:false} ]);
+          * </pre>
+          * <b>label</b> is the localized string of the column for showing on the
+          * UI page <br>
+          * <b>value</b> is a property of an object. <br>
+          * <b>flag</b> true for selected by default, otherwise, unselected. It is true
+          * by default. <br>
+          */
+         /**
+          * Added by Zach
+          * add labelFunction support for filter so that the search function cloud be run on display label
+          * Then the filter DataProvider format is
+          * {label:"column1", value:"name", flag:true, labelFunction:labelFun}
+          * The labelFunction is optional, if do not have labelFunction, use the value field to build the string instead,
+          * If the labelFunction is available, the value field will not be used.
+          */
+         public function get filterDataProvider():ArrayCollection {
+            return _filterDataProvider;
+         }
+
+         public function set filterDataProvider(value:ArrayCollection):void {
+            _filterDataProvider = value;
+
+            _filterSelectedIndices.removeAll();
+            const num:int = _filterDataProvider.length;
+            for (var ii:int = 0; ii < num; ++ ii) {
+               if (!_filterDataProvider[ii].hasOwnProperty("flag")
+                  || _filterDataProvider[ii].flag) {
+                  _filterSelectedIndices.addItem(ii);
+               }
+            }
+         }
+
+         /**
+          * Filtering function.
+          */
+         public var filterFunction:Function = filterFuc;
+
+         public function get defaultFunction():Function {
+            return filterFuc;
+         }
+
+         /**
+          * Columns map to store the value and show string map, e.g.
+          * if column value is 1, the show string is "In progress",
+          * column name is status, then <code>columnsMap</code> should
+          * be [{"status": { 1: "In progress"}}], you can add more then
+          * one column to this map.
+          */
+         [Bindable]
+         public var columnsMap:Array;
+
+         [Bindable]
+         /**
+          * Prompt string shown in the search box.
+          */
+         public var prompt:String = "searchBox.promptForAllCols";
+
+         private static const STATE_NORMAL:String = "normal";
+         private static const STATE_SEARCHING:String = "searching";
+         private static const DELAY:int = 500;   // 500 millionseconds
+
+         private var _timer:Timer = new Timer(DELAY, 1);
+         private var _filterSelectedIndices:ArrayCollection = new ArrayCollection();
+
+         public function get filterSelectedIndices():ArrayCollection {
+            return _filterSelectedIndices;
+         }
+
+         private function init():void {
+            _timer.addEventListener(TimerEvent.TIMER, filteringCycle);
+
+            _filterSelectedIndices.addEventListener(CollectionEvent.COLLECTION_CHANGE, updatePrompt);
+         }
+
+         private function updatePrompt(event:*):void {
+            if (!filterDataProvider) {
+               return;
+            }
+
+            textChanged();
+         }
+
+         private function textChanged():void {
+            if (!_timer.running) {
+               _timer.start();
+            } else {
+               _timer.reset();
+               _timer.start();
+            }
+         }
+
+         private function onButtonClick(event:MouseEvent):void {
+            filteringCycle(event);
+         }
+
+         private function onDropdownButtonClick(event:MouseEvent):void {
+            var popup:SearchSources = new SearchSources();
+            popup.filterDataProvider = filterDataProvider;
+            popup.filterSelectedIndices = _filterSelectedIndices;
+
+            var loc:Point = this.localToGlobal(new Point(0, this.height + 5));
+            popup.x = loc.x;
+            popup.y = loc.y;
+            popup.width = this.width;
+
+            PopUpManager.addPopUp(popup, this, false);
+         }
+
+         private function filteringCycle(event:*):void {
+            preFiltering(event);
+            callLater(doFiltering, [event]);
+         }
+
+         private function preFiltering(event:*):void {
+            this.searchStack.selectedChild = loadingSpinnerContainer;
+            this.currentState = "searching";
+         }
+
+         public function doFiltering(event:*):void {
+            if (!filterDataProvider) {
+               return;
+            }
+
+            if ((filterDataProvider != null)
+               && (_filterSelectedIndices != null)
+               && (dataProvider != null)
+               && (filterFunction != null)) {
+               dataProvider.filterFunction = filterFunction;
+               dataProvider.refresh();
+            }
+
+            this.searchStack.selectedChild = searchButtonContainer;
+            this.currentState = "normal";
+
+            //  Dispatch event when the filtering has been completed.
+            dispatchEvent(new Event("filteringComplete"));
+         }
+
+         private function filterFuc(item:Object):Boolean {
+
+            if (item == null) {
+               return false;
+            }
+            /*
+            * pre-check user input, in case "a   b",
+            * actually the key words should be "a" and "b", but not "a" and "  b"
+            */
+            var userInput:String = StringUtil.trim(searchInput.text);
+            if (userInput == null || userInput == "") {
+               return true;
+            }
+
+            var myReg:RegExp = /\s+/g;
+            userInput = userInput.replace(myReg, " ");
+            if (!caseSensitive) {
+               userInput = userInput.toLocaleLowerCase();
+            }
+            var words:Array = userInput.split(" ");
+            if (words == null || words.length == 0) {
+               return true;
+            }
+
+            var whole:String = "";
+
+            const colsNum:int = (_filterSelectedIndices == null) ? 0 : _filterSelectedIndices.length;
+            for (var colIdx:int = 0; colIdx < colsNum; ++ colIdx) {
+               var col:String = filterDataProvider.getItemAt(_filterSelectedIndices[colIdx]).value;
+               var labelFunction:Function = filterDataProvider.getItemAt(_filterSelectedIndices[colIdx]).hasOwnProperty("labelFunction") ?
+                  filterDataProvider.getItemAt(_filterSelectedIndices[colIdx]).labelFunction : null;
+               //label function is prior to value field which allow user customize the null value to a meaingfule string.
+               if (labelFunction != null) {
+                  whole += " " + labelFunction(item);
+               }
+               else if (!item.hasOwnProperty(col) || item[col] == null) {
+                  continue;
+               }
+               else {
+                  /*use space to connect two property values
+                  * in case is 4, one is 5, and key word is 45.
+                  */
+                  var mapColumnString:String = findColumnString(item[col], col);
+                  if (mapColumnString != null) {
+                     whole += " " + mapColumnString;
+                  }
+                  else {
+                     whole += " " + item[col].toString();
+                  }
+               }
+            }
+
+            if (whole == "") {
+               return false;
+            }
+
+            if (!caseSensitive) {
+               whole = whole.toLocaleLowerCase();
+            }
+            //no need to check words == null, it is done and with a true as return
+            const wordsNum:int = words.length;
+            for (var idx:int = 0; idx < wordsNum; ++ idx) {
+               var word:String = words[idx] as String;
+               if (whole.indexOf(word) == -1) {
+                  return false;
+               }
+            }
+
+            return true;
+         }
+
+         private function findColumnString(item:*, columnName:String):String {
+            var result:String = null;
+            if (columnsMap != null) {
+               for each(var column:Object in columnsMap) {
+                  if (column[columnName] != null) {
+                     result = column[columnName][item];
+                     break;
+                  }
+               }
+            }
+
+            return result;
+         }
+      ]]>
+   </mx:Script>
+
+   <mx:states>
+      <mx:State name="normal">
+         <mx:SetProperty target="{searchStack}" name="selectedIndex" value="0"/>
+         <mx:SetProperty target="{loadingSpinner}" name="spinning" value="false"/>
+         <mx:SetProperty target="{searchButton}" name="enabled" value="true"/>
+      </mx:State>
+      <mx:State name="searching">
+         <mx:SetProperty target="{searchStack}"
+                         name="selectedIndex"
+                         value="1"/>
+         <mx:SetProperty target="{loadingSpinner}"
+                         name="spinning"
+                         value="true"/>
+         <mx:SetProperty target="{searchButton}" name="enabled" value="false"/>
+      </mx:State>
+   </mx:states>
+
+   <mx:HBox height="24" width="100%" styleName="lightSearchInputContainer">
+      <vmware:TextInputEx id="searchInput"
+                          prompt="{prompt}"
+                          keyUp="textChanged()"
+                          styleName="searchInput"
+                          promptStyleName="searchPromptText"
+                          change="textChanged()"
+                          valueCommit="textChanged()"
+                          width="100%" height="20"/>
+   </mx:HBox>
+
+   <mx:ViewStack id="searchStack" creationPolicy="all">
+      <mx:HBox id="searchButtonContainer" styleName="searchButtonContainer">
+         <vmware:ButtonEx id="searchButton"
+                          click="onButtonClick(event)"
+                          icon="{searchButtonIcon}"
+                          downIcon="{searchButtonIcon}"
+                          width="30" height="24"
+                          cornerRadius="0"/>
+      </mx:HBox>
+      <mx:HBox id="loadingSpinnerContainer" styleName="searchSpinnerContainer">
+         <vmware:Spinner id="loadingSpinner" forwardAnimation="{SpinnerAnimations.FORWARD_BLACK}"/>
+      </mx:HBox>
+   </mx:ViewStack>
+</mx:HBox>
+

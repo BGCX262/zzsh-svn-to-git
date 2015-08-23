@@ -1,0 +1,70 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx"
+		 horizontalAlign="center" verticalAlign="middle" 
+		 xmlns:button="com.partycommittee.control.button.*"
+		 width="100%">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcMemberVo;
+			
+			import mx.events.CloseEvent;
+			
+			[Bindable]
+			private var memberName:String;
+			
+			private var _member:PcMemberVo;
+			[Bindable]
+			public function get member():PcMemberVo {
+				return this._member;
+			}
+			public function set member(value:PcMemberVo):void {
+				this._member = value;
+				if (this._member) {
+					memberName = this._member.name;
+				} else {
+					memberName = "";
+				}
+			}
+			
+			private var _agency:PcAgencyVo;
+			[Bindable]
+			public function get agency():PcAgencyVo {
+				return this._agency;
+			}
+			public function set agency(value:PcAgencyVo):void {
+				this._agency = value;
+				if (this._agency) {
+					member = this._agency.member;
+				}
+			}
+			
+			private function onBrowseBtnClick():void {
+				if (!agency || (agency.codeId == PCConst.AGENCY_CODE_BOARDCOMMITTEES)) {
+					return;
+				}
+				var win:ChooseMemberWindow = new ChooseMemberWindow();
+				win.agency = this.agency;
+				win.addEventListener(CloseEvent.CLOSE, onChooseWinClosed);
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+			private function onChooseWinClosed(event:CloseEvent):void {
+				var win:ChooseMemberWindow = event.currentTarget as ChooseMemberWindow;
+				var selectedMember:PcMemberVo = win.selectedMember;
+				if (selectedMember) {
+					member = selectedMember;
+				}
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:TextInput id="personTxt" editable="false" width="100%" text="{memberName}"/>
+	<button:PcButton label="浏览..." click="onBrowseBtnClick()"/>
+</mx:HBox>

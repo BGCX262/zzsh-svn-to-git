@@ -1,0 +1,100 @@
+<?xml version="1.0" encoding="utf-8"?>
+<controls:EscapeWindow xmlns:fx="http://ns.adobe.com/mxml/2009" 
+					   xmlns:s="library://ns.adobe.com/flex/spark" 
+					   xmlns:mx="library://ns.adobe.com/flex/mx" 
+					   width="400" height="300"
+					   showCloseButton="true" close="PopupMgr.instance.removeWindow(this)"
+					   xmlns:controls="com.partycommittee.control.*"
+					   title="选择缺席人员"
+					   creationComplete="onCreationCompleted()">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.util.ObjectUtil;
+			import com.partycommittee.vo.PcMemberVo;
+			
+			import mx.collections.ArrayCollection;
+			
+			private var _parentView:ChooseAsenceBox;
+			[Bindable]
+			public function get parentView():ChooseAsenceBox {
+				return this._parentView;
+			}
+			public function set parentView(value:ChooseAsenceBox):void {
+				this._parentView = value;
+			}
+			
+			private var _asenceIds:Array;
+			[Bindable]
+			public function get asenceIds():Array {
+				return this._asenceIds;
+			}
+			public function set asenceIds(value:Array):void {
+				this._asenceIds = value;
+			}
+			
+			private function onCreationCompleted():void {
+				updateData();
+			}
+			
+			private function updateData():void {
+				allMembers = ObjectUtil.clone(parentView.memberList) as ArrayCollection;
+				updateSelection();
+			}
+			
+			private function updateSelection():void {
+				var selectedItems:Array = new Array();
+				for each (var item:PcMemberVo in allMembers) {
+					if (asenceIds.indexOf(item.id + "") != -1) {
+						selectedItems.push(item);
+					}
+				}
+				allList.selectedItems = selectedItems;
+				addToAsence();
+			}
+			
+			[Bindable]
+			private var allMembers:ArrayCollection = new ArrayCollection();
+			[Bindable]
+			private var asenceMembers:ArrayCollection = new ArrayCollection();
+			
+			private function onOkBtnClick():void {
+				this.parentView.setAsenceMembers(asenceMembers);
+				this.close();
+			}
+			
+			private function addToAsence():void {
+				var selectedItems:Array = allList.selectedItems;
+				for each (var item:PcMemberVo in selectedItems) {
+					allMembers.removeItemAt(allMembers.getItemIndex(item));
+					asenceMembers.addItem(item);
+				}
+			}
+			
+			private function removeAsence():void {
+				var selectedItems:Array = asenceList.selectedItems;
+				for each (var item:PcMemberVo in selectedItems) {
+					asenceMembers.removeItemAt(asenceMembers.getItemIndex(item));
+					allMembers.addItem(item);
+				}
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	<mx:HBox width="100%" height="100%">
+		<mx:List id="allList" height="100%" width="50%" 
+				 dataProvider="{allMembers}" labelField="name"/>
+		<mx:VBox height="100%" verticalAlign="middle">
+			<mx:Button label=">>" click="addToAsence()" enabled="{allList.selectedItem}"/>
+			<mx:Button label="&lt;&lt;" click="removeAsence()" enabled="{asenceList.selectedItem}"/>
+		</mx:VBox>
+		<mx:List id="asenceList" height="100%" width="50%" 
+				 dataProvider="{asenceMembers}" labelField="name"/>
+	</mx:HBox>
+	<mx:ControlBar width="100%" horizontalAlign="right">
+		<mx:Button label="确定" click="onOkBtnClick()"/>
+		<mx:Button label="关闭" click="close()"/>
+	</mx:ControlBar>
+</controls:EscapeWindow>

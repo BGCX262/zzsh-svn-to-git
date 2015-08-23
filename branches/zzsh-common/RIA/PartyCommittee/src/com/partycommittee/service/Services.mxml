@@ -1,0 +1,116 @@
+<?xml version="1.0" encoding="utf-8"?>
+<cairngorm:ServiceLocator xmlns:mx="http://www.adobe.com/2006/mxml" 
+						  xmlns:cairngorm="com.adobe.cairngorm.business.*" >
+	
+	<mx:Script>
+		<![CDATA[
+			import com.partycommittee.model.ModelLocator;
+			
+			import mx.core.FlexGlobals;
+			import mx.messaging.Channel;
+			import mx.messaging.ChannelSet;
+			import mx.messaging.Consumer;
+			import mx.messaging.channels.AMFChannel;
+			import mx.messaging.channels.StreamingAMFChannel;
+			import mx.rpc.events.FaultEvent;
+			import mx.rpc.events.ResultEvent;
+			import mx.utils.ObjectUtil;
+			import mx.utils.StringUtil;
+			import mx.utils.URLUtil;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+		
+			private var isInitialized:Boolean = false;
+			
+			[Bindable]
+			protected var channelSet:ChannelSet;
+			
+			public function init():void {
+				var url:String = FlexGlobals.topLevelApplication.url;
+//				url = "http://localhost:8080/zzsh/index.jsp";
+				
+				// Init service locater
+				var scheme:String = URLUtil.getProtocol(url);
+				var host:String = URLUtil.getServerName(url);
+				var port:String = String(URLUtil.getPort(url));
+				var parts:Array = url.match('^.*' + host + '[^\/]*\/([^\/]*).*$');
+				var contextRoot:String = parts && parts.length == 2 ? String(parts[1]) : 'PartyCommittee';
+				if (contextRoot && contextRoot.indexOf('/') === 0) {
+					contextRoot = contextRoot.substring(1);
+				}
+				
+				model.LOGIN_PAGE = StringUtil.substitute("{0}://{1}:{2}/{3}/login/Login.jsp", scheme, host, port, contextRoot);
+				model.INDEX_PAGE = StringUtil.substitute("{0}://{1}:{2}/{3}/index.jsp", scheme, host, port, contextRoot);
+				
+				if (!channelSet) {
+					channelSet = new ChannelSet();
+				}
+				
+				// Create my-amf chanelset.
+				var amfEndPoint:String = StringUtil.substitute("{0}://{1}:{2}/{3}/messagebroker/amf/", scheme, host, port, contextRoot);
+				var amfChannel:Channel = new AMFChannel("my-amf", amfEndPoint);
+				amfChannel.requestTimeout = 0;
+				amfChannel.connectTimeout = 0;
+				channelSet.addChannel(amfChannel);
+				
+				isInitialized = true;
+			}
+			
+			private function getChannelSet():ChannelSet {
+				if (!isInitialized) {
+					init();
+				}
+				return channelSet;
+			}
+		]]>
+	</mx:Script>
+	
+	<mx:RemoteObject id="pcUser"
+					 destination="PcUserRo"
+					 channelSet="{channelSet}"/>
+	<mx:RemoteObject id="pcMember"
+					 destination="PcMemberRo"
+					 channelSet="{channelSet}"/>
+	<mx:RemoteObject id="pcAgency"
+					 destination="PcAgencyRo"
+					 channelSet="{channelSet}"/>
+	<mx:RemoteObject id="pcWorkPlan"
+					 destination="PcWorkPlanRo"
+					 channelSet="{channelSet}"/>
+	<mx:RemoteObject id="pcMeeting"
+					 destination="PcMeetingRo"
+					 channelSet="{channelSet}"/>
+	<mx:RemoteObject id="pcRemind"
+					 destination="PcRemindRo"
+					 channelSet="{channelSet}"/>	
+	<mx:RemoteObject id="pcRemindConfig"
+					 destination="PcRemindConfigRo"
+					 channelSet="{channelSet}"/>	
+	<mx:RemoteObject id="pcRemindLock"
+					 destination="PcRemindLockRo"
+					 channelSet="{channelSet}"/>	
+	<mx:RemoteObject id="pcParentStat"
+					 destination="PcParentStatRo"
+					 channelSet="{channelSet}"/>	
+	<mx:RemoteObject id="pcStat"
+					 destination="PcStatRo"
+					 channelSet="{channelSet}"/>
+	<mx:RemoteObject id="pcBulletin"
+					 destination="PcBulletinRo"
+					 channelSet="{channelSet}"/>
+	<mx:RemoteObject id="pcBackup"
+					 destination="PcBackupRo"
+					 channelSet="{channelSet}"/>	
+	
+    <!-- HTTPService example
+	<mx:HTTPService
+		id="myHTTPService"
+        url="http://localhost/..."
+        showBusyCursor="true"
+        method="POST"
+        resultFormat="text"
+    />   
+	-->
+	
+</cairngorm:ServiceLocator>

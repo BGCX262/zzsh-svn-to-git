@@ -1,0 +1,192 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView  xmlns:fx="http://ns.adobe.com/mxml/2009" 
+							xmlns:s="library://ns.adobe.com/flex/spark" 
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							styleName="mainCanvas"
+							width="100%" height="100%" 
+							xmlns:button="com.partycommittee.control.button.*" 
+							xmlns:datagrid="com.partycommittee.control.datagrid.*"
+							xmlns:navigation="com.partycommittee.manager.navigation.*" 
+							xmlns:pagebar="com.partycommittee.control.pagebar.*"
+							creationComplete="onCreationCompleted()">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcBulletinEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.LblFunctionHelper;
+			import com.partycommittee.vo.PcBulletinVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			import com.partycommittee.vo.page.PageResultVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.controls.DataGrid;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			private var _editEnable:Boolean = true;
+			[Bindable]
+			public function get editEnable():Boolean {
+				return this._editEnable;
+			}
+			public function set editEnable(value:Boolean):void {
+				this._editEnable = value;
+			}
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			private var dp:ArrayCollection = new ArrayCollection();
+			
+			private var _bulletin:PcBulletinVo
+			public function set bulletin(value:PcBulletinVo):void {
+				this._bulletin = value;
+			}
+			[Bindable]
+			public function get bulletin():PcBulletinVo {
+				return this._bulletin;
+			}
+			
+			private var _page:PageHelperVo;
+			[Bindable]
+			public function get page():PageHelperVo {
+				if (!this._page) {
+					this._page = new PageHelperVo();
+				}
+				return this._page;
+			}
+			public function set page(value:PageHelperVo):void {
+				this._page = value;
+			}
+			
+			private function onCreationCompleted():void {
+				if (this.tab && this.tab.selectedChild == this) {
+					
+					refreshData();
+				}	
+			}			
+			
+			public function updateData():void {
+				refreshData();
+			}
+			
+			private function refreshData():void {
+				var bulletinEvent:PcBulletinEvent = new PcBulletinEvent(PcBulletinEvent.GET_BULLETIN_LIST);
+				bulletinEvent.page = page;
+				bulletinEvent.successCallback = onRefresh;
+				bulletinEvent.dispatch();
+			}
+			
+			private function onRefresh(data:Object, event:PcBulletinEvent):void {
+				var pageResult:PageResultVo = data as PageResultVo;
+				if (!pageResult) {
+					return;
+				}
+				page = pageResult.pageHelper;
+				dp = pageResult.list;	
+			}
+			
+			private function addBulletin():void {
+				
+				var window:PcBulletinWindow = new PcBulletinWindow();
+				window.parentView = this;
+				PopupMgr.instance.popupWindow(window);
+			}
+			
+			private function updateBulletin():void {
+				
+				var window:PcBulletinWindow = new PcBulletinWindow();
+				window.type = CRUDEventType.UPDATE;
+				window.parentView = this;
+				window.title = "修改公告";
+				window.bulletinVo = datagrid.selectedItem as PcBulletinVo;
+				window.editEnable = editEnable;
+				PopupMgr.instance.popupWindow(window);
+				
+			}
+			
+			private function onItemDoubleClick():void {
+				updateBulletin();
+			}
+			
+			
+			private function deleteBulletin():void {
+				var deleteBulletin:PcBulletinVo = datagrid.selectedItem as PcBulletinVo;
+				Alert.show("确定删除【" + deleteBulletin.title + "】？", "提示", 
+					Alert.YES | Alert.NO, FlexGlobals.topLevelApplication.root, onDeleteAlertClose);
+			}
+			
+			private function onDeleteAlertClose(event:CloseEvent):void {
+				if (event.detail == Alert.YES) {
+					doDelete();
+				}
+			}
+			
+			private function doDelete():void {
+				var evt:PcBulletinEvent = new PcBulletinEvent(CRUDEventType.DELETE, datagrid.selectedItem as PcBulletinVo);
+				evt.successCallback = onDeleteSuccess;
+				evt.failureCallback = onDeleteFailure;
+				this.enabled = false;
+				evt.dispatch();
+			}
+			
+			private function onDeleteSuccess(data:Object, evt:PcBulletinEvent):void {
+				this.enabled = true;
+				updateData();
+			}
+			
+			private function onDeleteFailure(info:Object, evt:PcBulletinEvent):void {
+				this.enabled = true;
+				Alert.show(info.toString());
+			}
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:ControlBar width="100%" horizontalAlign="right"
+					   visible="{editEnable}" includeInLayout="{editEnable}">
+			<button:PcButton label="增加" click="addBulletin()"/>
+			<button:PcButton label="修改" click="updateBulletin()" enabled="{datagrid.selectedItem}"/>
+			<button:PcButton label="删除" click="deleteBulletin()" enabled="{datagrid.selectedItem}"/>
+		</mx:ControlBar>
+		
+		<mx:AdvancedDataGrid id="datagrid" designViewDataType="flat" 
+							 horizontalScrollPolicy="auto"
+							 verticalScrollPolicy="auto"
+							 width="100%" height="100%" color="0x323232"  
+							 sortableColumns="false" sortExpertMode="true"
+							 variableRowHeight="true"
+							 doubleClickEnabled="true"
+							 dataProvider="{dp}"
+							 doubleClick="onItemDoubleClick()"
+							 >  
+			
+			<mx:columns>
+				<mx:AdvancedDataGridColumn headerText="序号" dataField="id"  />
+				<mx:AdvancedDataGridColumn headerText="标题" dataField="title" width="300"/>
+				
+				<mx:AdvancedDataGridColumn headerText="发布时间" dataField="pubTime" 
+										   labelFunction="{LblFunctionHelper.dateLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="过期时间" dataField="expireTime"  
+										   labelFunction="{LblFunctionHelper.dateLblFunc}"/>				
+			</mx:columns>
+		</mx:AdvancedDataGrid>
+		
+	</mx:VBox>
+	
+</navigation:NavigationView>

@@ -1,0 +1,297 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009"
+		   xmlns:s="library://ns.adobe.com/flex/spark"
+		   xmlns:mx="library://ns.adobe.com/flex/mx" 
+		   width="100%" height="100%" 
+		   xmlns:control="com.partycommittee.control.*" 
+		   xmlns:closebox="com.partycommittee.control.closebox.*" 
+		   xmlns:partymember="com.partycommittee.views.partymember.*" 
+		   xmlns:tree="com.partycommittee.control.tree.*" 
+		   xmlns:agencyviews="com.partycommittee.views.agencymgmt.agencyviews.*" 
+		   xmlns:systemviews="com.partycommittee.views.sysmgmt.*"
+		   xmlns:stats="com.partycommittee.views.stats.*"
+		   creationComplete="onCreationCompleted()" 
+		   xmlns:agencyactivity="com.partycommittee.views.agencymgmt.agencyactivity.*" 
+		   xmlns:agencymgmt="com.partycommittee.views.agencymgmt.*" 
+		   xmlns:mainview="com.partycommittee.views.mainview.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.control.mainmenu.Menu;
+			import com.partycommittee.control.mainmenu.MenuItem;
+			import com.partycommittee.control.tree.classes.Node;
+			import com.partycommittee.controller.Controller;
+			import com.partycommittee.events.AccordionItemClickEvent;
+			import com.partycommittee.events.PcAgencyEvent;
+			import com.partycommittee.events.PcBulletinEvent;
+			import com.partycommittee.events.PcCommonEvent;
+			import com.partycommittee.events.PcMemberEvent;
+			import com.partycommittee.events.PcRemindConfigEvent;
+			import com.partycommittee.events.PcUserEvent;
+			import com.partycommittee.manager.navigation.NavigationMgr;
+			import com.partycommittee.manager.tree.TreeContextMenuMgr;
+			import com.partycommittee.manager.tree.TreeMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.UserUtil;
+			import com.partycommittee.vo.PcAgencyVo;
+			import com.partycommittee.vo.PcUserVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.events.DividerEvent;
+			import mx.events.PropertyChangeEvent;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			private function onCreationCompleted():void {
+				model.tree = this.tree;
+				TreeContextMenuMgr.getInstance().registeContextMenu(tree);
+				
+				initHDivBox(true);
+				initToolbar();
+				initUserData();
+				initRemindConfig();
+				initDutyCode();
+				initSetSystemTime();
+			}
+			
+			private function initHDivBox(drag:Boolean) {
+				hDivBox.liveDragging = drag;
+				hDivBox.doubleClickEnabled = drag;
+				
+				if (drag) {
+					hDivBox.getDividerAt(0).addEventListener(MouseEvent.DOUBLE_CLICK, onDividerDoubleClick);
+				} else {
+					hDivBox.getDividerAt(0).removeEventListener(MouseEvent.DOUBLE_CLICK, onDividerDoubleClick);
+				}
+			}
+			
+			private function initToolbar():void {
+				TreeContextMenuMgr.getInstance().editEnable = true;
+				treeControlBar.visible = treeControlBar.includeInLayout = true;
+//				unExpandTree();	
+			}
+			
+			private function initUserData():void {
+				var userEvent:PcUserEvent = new PcUserEvent(PcUserEvent.GET_SESSION);
+				userEvent.successCallback = onGetSessionSuccess;
+				userEvent.dispatch();
+			}
+			
+			private function initRoles():void {
+				var userEvent:PcUserEvent = new PcUserEvent(PcUserEvent.GET_ROLES);
+				userEvent.successCallback = onGetRolesSuccess;
+				userEvent.dispatch();
+			}			
+			
+			private function initRemindConfig():void {
+				var evt:PcRemindConfigEvent = new PcRemindConfigEvent(PcRemindConfigEvent.GET_REMIND_CONFIG_LIST);
+				evt.successCallback = onGetRemindConfigSuccess;
+				evt.dispatch();
+			}
+			
+			private function initDutyCode():void {
+				var evt:PcMemberEvent = new PcMemberEvent(PcMemberEvent.GET_DUTY_CODE);
+				evt.successCallback = onGetDutyCodeSuccess;
+				evt.dispatch();
+			}	
+			
+			private function initSetSystemTime():void {
+				var evt:PcCommonEvent = new PcCommonEvent(PcCommonEvent.GET_MILLISECONDS);
+				evt.successCallback = onGetMillisecondsSuccess;
+				evt.dispatch();
+			}			
+	
+			private function onGetSessionSuccess(data:Object, evt:PcUserEvent):void {
+				if (!data) return;
+				var user:PcUserVo = data as PcUserVo;
+				model.loginUser = user;
+				if (!user) {
+					return;
+				}
+
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+				
+				// Load agency by 
+				var agencyEvent:PcAgencyEvent = new PcAgencyEvent(PcAgencyEvent.GET_ROOT_AGENCY_BY_USERID);
+				agencyEvent.userId = model.loginUser.id;
+				agencyEvent.failureCallback = noAgencyHandler;
+				agencyEvent.dispatch();
+				
+				if (!isRootUser()) {
+					TreeContextMenuMgr.getInstance().editEnable = false;
+					treeControlBar.visible = treeControlBar.includeInLayout = false;
+					mainViewStack.removeChild(systemManagerView);
+					mainViewStack.removeChild(revertagencyView);
+				}
+				
+				
+				setOrgViewEdit();
+				initRoles();
+			}
+			
+			private function onGetRolesSuccess(data:Object, evt:PcUserEvent):void {
+				if (!data) return;
+				model.roleCollection = data as ArrayCollection;
+			}
+			
+			private function onGetRemindConfigSuccess(data:Object, evt:PcRemindConfigEvent):void {
+				if (!data) return;
+				model.remindConfigCollection = data as ArrayCollection;
+			}
+			
+			private function onGetDutyCodeSuccess(data:Object, evt:PcMemberEvent):void {
+				if (!data) return;
+				model.dutyCodeCollection = data as ArrayCollection;
+			}
+			
+			private function onGetMillisecondsSuccess(data:Object, evt:PcCommonEvent):void {
+				
+				if (!data) return;
+				DateUtilExt.setServerTimeOffset(data as Number);
+
+				
+			}
+
+			private function onPropertyChanged(event:PropertyChangeEvent):void {
+				if (event.property == "isLeafUser") {
+					model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChanged);
+					if (model.isLeafUser) {
+						TreeContextMenuMgr.getInstance().editEnable = false;
+						treeControlBar.visible = treeControlBar.includeInLayout = false;
+						TreeContextMenuMgr.getInstance().enableRefresh = false;
+						unExpandTree();
+					}
+				}
+			}
+			
+			private function setOrgViewEdit():void {
+				// 判断是否可以填写组织管理
+				if (orgView && model.focusAgencyVo) {
+					
+					// 1. 可以填写本支部的组织管理					
+					orgView.editEnable = (parseFloat(model.loginUser.privilege) == model.focusAgencyVo.id );
+					
+					// 2. 只有上报权才可填写:
+					if (model.isLeafUser) {
+						if (UserUtil.checkRole(2, model.loginUser.roles) == false) {
+							orgView.editEnable = false;
+						}
+					}
+				}				
+			}
+			
+			private function isRootUser():Boolean {
+				if (!model.loginUser.privilege || model.loginUser.privilege != "1") {
+					return false;
+				}
+				return true;
+			}
+			
+			private var _isTreeMinSize:Boolean = false;
+			private var _treeNormalSize:Number = 228;
+			private function onDividerDoubleClick(event:MouseEvent):void {
+				if (this._isTreeMinSize) {
+					expandTree();
+				} else {
+					unExpandTree();
+				}
+			}
+			
+			private function expandTree():void {
+				treeBox.width = this._treeNormalSize;
+				this._isTreeMinSize = false;
+			}
+			
+			private function unExpandTree():void {
+				this._treeNormalSize = treeBox.width;
+				treeBox.width = 0;
+				this._isTreeMinSize = true;
+			}
+			
+			private function noAgencyHandler(info:Object, evt:PcAgencyEvent):void {
+				Alert.show("该用户没有分配任何组织管理权限！");
+			}
+			
+			private function onItemClick():void {
+				var focusNode:Node = tree.selectedItem as Node;
+				if (!focusNode.entity) {
+					return;
+				}
+				var focusAgency:PcAgencyVo = focusNode.entity as PcAgencyVo;
+				model.focusAgencyVo = focusAgency;
+				
+				// If is parent, do not allow edit.
+				if (model.isLeafUser && focusAgency != model.leafAgency) {
+//					orgView.editEnable = false;
+					if (model.loginUser.privilege == "1") {
+						TreeContextMenuMgr.getInstance().editEnable = false;
+						treeControlBar.visible = treeControlBar.includeInLayout = false;
+					}
+				} else {
+//					orgView.editEnable = true;
+					if (model.loginUser.privilege == "1") {
+						TreeContextMenuMgr.getInstance().editEnable = true;
+						treeControlBar.visible = treeControlBar.includeInLayout = true;
+					}
+				}
+				
+				setOrgViewEdit();			
+				
+			}
+			
+			private function viewStackChange(event:Event):void {				
+				if (mainViewStack.selectedChild == revertagencyView) {
+					unExpandTree();
+					
+					initHDivBox(false);				
+				}  else {
+					expandTree();
+					initHDivBox(true);	
+				}
+				
+				
+			}
+			
+			
+
+		]]>
+	</fx:Script>
+	
+	<mx:Canvas id="container" width="100%" height="100%">
+		<mx:HDividedBox id="hDivBox" width="100%" height="100%">
+			<mx:VBox id="treeBox" width="228" height="100%"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				<tree:LoadingTree id="tree" width="100%" height="100%" 
+								  dataProvider="{model.treeCollection}"
+								  doubleClickEnabled="true"
+								  itemClick="onItemClick()"/>
+				<tree:TreeControlBar id="treeControlBar" width="100%"/>
+			</mx:VBox>
+			<mx:ViewStack id="mainViewStack" width="100%" height="100%" creationPolicy="auto"
+						  left="6" right="6" top="6" bottom="6" change="viewStackChange(event)">
+				<mainview:MainView id="mainView" label="主页" width="100%" height="100%" viewStack="{mainViewStack}"/>
+				<agencymgmt:OrgView id="orgView" width="100%" height="100%" 
+									label="组织管理"
+									viewStack="{mainViewStack}"/>
+				<agencyactivity:ActivityView id="activityView" width="100%" height="100%"
+											 label="组织生活" 
+											 viewStack="{mainViewStack}"/>
+				<stats:StatsList id="statView" width="100%" height="100%" 
+											label="统计分析"
+											viewStack="{mainViewStack}"/>
+				<systemviews:SystemManagerView id="systemManagerView" width="100%" height="100%" 
+											   label="系统管理"
+											   viewStack="{mainViewStack}"/>
+				<agencymgmt:HistoryAgency id="revertagencyView" width="100%" height="100%" 
+											   label="历史党支部"
+											   viewStack="{mainViewStack}"/>				
+				
+			</mx:ViewStack>
+		</mx:HDividedBox>
+	</mx:Canvas>
+	
+</mx:Canvas>

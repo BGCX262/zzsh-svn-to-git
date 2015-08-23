@@ -1,0 +1,281 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView  xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx"
+		   styleName="mainCanvas"
+		   width="100%" height="100%" 
+		   xmlns:button="com.partycommittee.control.button.*" 
+		   xmlns:datagrid="com.partycommittee.control.datagrid.*"
+		   xmlns:navigation="com.partycommittee.manager.navigation.*" 
+		   xmlns:pagebar="com.partycommittee.control.pagebar.*"
+		   creationComplete="onCreationCompleted()">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.DateUtilExt;
+			import com.partycommittee.events.PcRemindLockEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.LblFunctionHelper;
+			import com.partycommittee.vo.FilterVo;
+			import com.partycommittee.vo.PcRemindLockVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			import com.partycommittee.vo.page.PageResultVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.controls.DataGrid;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			private var dp:ArrayCollection = new ArrayCollection();
+
+			private var _page:PageHelperVo;
+			[Bindable]
+			public function get page():PageHelperVo {
+				if (!this._page) {
+					this._page = new PageHelperVo();
+				}
+				return this._page;
+			}
+			public function set page(value:PageHelperVo):void {
+				this._page = value;
+			}
+			
+			private function onCreationCompleted():void {
+//				onNavigateIn();
+				
+				
+				if (yearCmb) {
+					yearCmb.dataProvider = DataproviderFactory.getRangeYearForReport();
+					yearCmb.selectedItem = model.reportYear = DateUtilExt.now().getFullYear();
+					//yearCmb.addEventListener(Event.CHANGE, onYearCmbChanged);
+				}	
+				
+				if (quarterCmb) {
+					var q:ArrayCollection =  DataproviderFactory.createQuarterDp();
+					q.addItemAt("全部", 0);
+					quarterCmb.dataProvider = q; 
+					quarterCmb.selectedIndex = 0;
+				}				
+				
+				if (typeCmb) {
+					var tq:Array = DataproviderFactory.createTypeDp();
+					tq.unshift("全部");
+					typeCmb.dataProvider = tq;
+					
+					typeCmb.selectedIndex = 0;
+				}
+				
+				if (monthCmb) {
+					var q:ArrayCollection =  DataproviderFactory.createMonthDp();
+					q.addItemAt("全部", 0);					
+					monthCmb.dataProvider = q;
+					monthCmb.selectedIndex = 0;
+				}				
+				
+				if (this.tab && this.tab.selectedChild == this) {
+					
+					refreshData();
+				}	
+			}
+			
+			override protected function onNavigateIn():void {
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+				pagebar.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPageBarChanged);
+				
+
+				
+				refreshData();
+			}
+			
+			override protected function onNavigateOut():void {
+				model.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onModelChanged);
+				pagebar.removeEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPageBarChanged);
+			}
+			
+			private function onModelChanged(event:PropertyChangeEvent):void {
+				
+				if (event.property == "focusAgencyVo" ) {
+					pagebar.getData(1);
+				} 
+			}		
+			
+			private function onPageBarChanged(event:PropertyChangeEvent):void {
+				if (event.property == "pageChange") {
+					page = pagebar.page;
+					refreshData();
+				}
+			}
+			
+			private function refreshData():void {
+				if (!model.focusAgencyVo) return;
+//				if (model.focusAgencyVo.id == 1) return;
+				var evt:PcRemindLockEvent = new PcRemindLockEvent(PcRemindLockEvent.GET_REMIND_LOCK_BY_FILTERS);
+				evt.page = page;
+				var filters:Array = new Array();
+				// 查询条件
+				//党支部:
+				if (model.focusAgencyVo) {
+					
+					if (model.focusAgencyVo.codeId == 10) {
+						var vo:FilterVo = new FilterVo();
+						vo.id = 'agencyId';
+						vo.data = model.focusAgencyVo.id.toString();
+						filters.push(vo);
+					} else {
+						if (model.focusAgencyVo.id != 1) {
+							var vo:FilterVo = new FilterVo();
+							vo.id = 'parentCode';
+							vo.data = model.focusAgencyVo.code;
+							filters.push(vo);							
+						}
+
+					}
+					
+					
+				}
+				// 类型:
+				if (typeCmb.selectedIndex > 0) {				
+					var t_vo:FilterVo = new FilterVo();
+					t_vo.id = 'typeId';
+					t_vo.data = (typeCmb.selectedItem as Object).typeId;
+					filters.push(t_vo);
+				}
+				
+				var y_vo:FilterVo = new FilterVo();
+				y_vo.id = "year";
+				y_vo.data = (yearCmb.selectedItem as Number).toString();
+				filters.push(y_vo);
+				
+				if (quarterCmb.selectedIndex > 0) {
+					var vo:FilterVo = new FilterVo();
+					vo.id = "quarter";
+					vo.data  = (quarterCmb.selectedItem as Number).toString();
+					filters.push(vo);
+				}
+				
+				if (monthCmb.selectedIndex > 0) {
+					var vo:FilterVo = new FilterVo();
+					vo.id = "month";
+					vo.data  = (monthCmb.selectedItem as Number).toString();
+					filters.push(vo);
+				}				
+				
+				evt.filters = filters;
+				evt.successCallback = onRefresh;
+				evt.dispatch();
+			}
+			
+			private function onRefresh(data:Object, event:PcRemindLockEvent):void {
+//				dp = data as ArrayCollection;
+				var pageResult:PageResultVo = data as PageResultVo;
+				if (!pageResult) {
+					return;
+				}
+				page = pageResult.pageHelper;
+				dp = pageResult.list;				
+			}
+
+			private function onItemDoubleClick():void {
+//				var data = datagrid.selectedItem as pcRemindLockVo;
+//				if (data.statusId == 9) {
+//					unLock(data);
+//				}
+			}
+			
+			private function unLock(event:CloseEvent):void {
+				if (event.detail == Alert.YES) {
+					var data:PcRemindLockVo = datagrid.selectedItem as PcRemindLockVo;
+					data.statusId = 8;
+					var evt:PcRemindLockEvent = new PcRemindLockEvent(PcRemindLockEvent.UPDATE_REMIND_LOCK);
+					evt.pcRemindLockVo = data;
+					evt.successCallback = onUnlockSuceess;
+					evt.failureCallback = onUnlockFailure;
+					this.enabled = false;
+					evt.dispatch();
+				}
+			}
+			
+			public function confirmUnLock():void {
+				Alert.show("请确认解锁操作", "提示", 
+					Alert.YES | Alert.NO, FlexGlobals.topLevelApplication.root, unLock);
+			}
+			
+			private function onUnlockSuceess(data:Object, evt:PcRemindLockEvent):void {
+				this.enabled = true;
+				refreshData();
+			}
+			
+			private function onUnlockFailure(info:Object, evt:PcRemindLockEvent):void {
+				this.enabled = true;
+			}			
+
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+		<mx:HBox >
+			<mx:Label text="类型:"/>
+			<mx:ComboBox id="typeCmb"/>			
+			<mx:Label text="选择年份:"/>
+			<mx:ComboBox id="yearCmb"/>
+			<mx:Label text="季度:"/>
+			<mx:ComboBox id="quarterCmb" />
+			<mx:Label text="月份:"/>
+			<mx:ComboBox id="monthCmb" />			
+			<mx:Button label="查找" click="refreshData()"/>
+		</mx:HBox>		
+		<mx:AdvancedDataGrid id="datagrid" width="100%" height="100%" 
+										   headerStyleName="dataGridHeader"
+										   allowMultipleSelection="true"
+										   dataProvider="{dp}"
+										   horizontalScrollPolicy="auto">
+			<mx:columns>
+				<mx:AdvancedDataGridColumn headerText="支部名称" dataField="name" width="220"/>
+				<mx:AdvancedDataGridColumn headerText="年度" dataField="year" width="80"/>
+				<mx:AdvancedDataGridColumn headerText="季度" dataField="quarter" width="80"/>
+				<mx:AdvancedDataGridColumn headerText="月份" dataField="month" width="80"/>
+				<mx:AdvancedDataGridColumn headerText="类别" dataField="typeId" width="120" labelFunction="{LblFunctionHelper.workPlanTypeLblFunc}"/>
+				<mx:AdvancedDataGridColumn headerText="状态" dataField="statusId" width="80" itemRenderer="com.partycommittee.renderers.WpStatusRenderer"/>
+				<mx:AdvancedDataGridColumn headerText="操作" dataField="" width="120">
+					<mx:itemRenderer>
+						<fx:Component>
+							<mx:Box horizontalAlign="center" verticalAlign="middle"
+									horizontalScrollPolicy="off" verticalScrollPolicy="off">
+								<fx:Script>
+									<![CDATA[
+										import com.partycommittee.vo.PcRemindLockVo;
+										protected function BtnUnLockClick():void {
+											outerDocument.confirmUnLock();
+										}
+									]]>
+								</fx:Script>
+								<button:PcButton id="BtnupLock" label="解锁" click="BtnUnLockClick()" visible="{(data as PcRemindLockVo).statusId == 9}"/>
+							</mx:Box>
+						</fx:Component>
+					</mx:itemRenderer>					
+				</mx:AdvancedDataGridColumn>
+			</mx:columns>
+		</mx:AdvancedDataGrid>
+		<pagebar:PageBar id="pagebar" page="{page}" width="100%"/>
+	</mx:VBox>
+	
+</navigation:NavigationView>

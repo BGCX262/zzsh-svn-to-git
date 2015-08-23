@@ -1,0 +1,271 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:Canvas xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		   xmlns:s="library://ns.adobe.com/flex/spark" 
+		   xmlns:mx="library://ns.adobe.com/flex/mx" 
+		   width="100%"
+		   creationComplete="onCreationCompleted()" 
+		   xmlns:button="com.partycommittee.control.button.*">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.commands.PcBulletinCommand;
+			import com.partycommittee.events.PcBulletinEvent;
+			import com.partycommittee.events.PcUserEvent;
+			import com.partycommittee.manager.navigation.NavigationMgr;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.views.agencymgmt.OrgView;
+			import com.partycommittee.views.agencymgmt.agencyactivity.ActivityView;
+			import com.partycommittee.views.agencymgmt.agencyactivity.BrowseView;
+			import com.partycommittee.views.agencymgmt.agencyactivity.ReportView;
+			import com.partycommittee.views.sysmgmt.systemviews.AccountManageView;
+			import com.partycommittee.views.sysmgmt.systemviews.PcBulletinViewWindow;
+			import com.partycommittee.views.sysmgmt.systemviews.PwEditWindow;
+			import com.partycommittee.vo.PcBulletinVo;
+			import com.partycommittee.vo.page.PageHelperVo;
+			import com.partycommittee.vo.page.PageResultVo;
+			
+			import flash.net.sendToURL;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			import mx.controls.Text;
+			import mx.effects.Move;
+			import mx.events.EffectEvent;
+			import mx.events.FlexEvent;
+			import mx.events.PropertyChangeEvent;
+			
+			[Bindable]
+			private var updatePwTxt:String = '<u><font color="#0000ff"><a href="event:updatePw">修改密码</a></font></u>';
+			[Bindable]
+			private var logoffTxt:String = '<u><font color="#0000ff"><a href="event:updatePw">注销</a></font></u>';
+			
+			public static var mainPageMenuItem:Object = {id:"orgManage", label:"基本情况", navView:"orgView"};
+			
+			private var bitmapData:BitmapData;
+			
+			[Bindable]
+			public var mHeight:Number = 28;
+			[Bindable]
+			public var nHeight:Number = 120;
+			
+			[Bindable]
+			private var scrollBarHeight:Number = 0;
+			
+			[Bindable]
+			private var totalHeight:Number;
+			
+			
+			private var stopTimer:Timer;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			private var infoTxt:String;
+			private var _selectedMenuItem:Object;
+			
+			private function onCreationCompleted():void {
+				
+				if (!model.bulletinCollection || model.bulletinCollection.length == 0) {
+					initBulletin();
+				}				
+				
+				this._txt = new Text();
+				this._txt.setStyle("fontsize", 18);
+				this._txt.setStyle("fontWeight", "bold");
+//				this._txt.setStyle("color", 0xffffff);
+				this.moveLblCav.addChild(this._txt);
+				this._txt.addEventListener(TextEvent.LINK, onTxtLink);
+				this._txt.addEventListener(MouseEvent.MOUSE_OVER, onTxtMouseOver);
+				this._txt.addEventListener(MouseEvent.MOUSE_OUT, onTxtMouseOut);
+				
+				this._moveIn = new Move();
+				this._moveIn.duration = 1500;
+				this._moveIn.target = this._txt;
+				this._moveIn.xFrom = this.width;
+				this._moveIn.xTo = 300;
+				this._moveIn.addEventListener(EffectEvent.EFFECT_END, onMoveInEffectEnd);
+				this._moveOut = new Move();
+				this._moveOut.duration = 1500;
+				this._moveOut.target = this._txt;
+				this._moveOut.xFrom = 300;
+				this._moveOut.xTo = 0 - this.width;
+				this._moveOut.addEventListener(EffectEvent.EFFECT_END, onMoveOutEffectEnd);
+				
+				model.addEventListener(PropertyChangeEvent.PROPERTY_CHANGE, onPropertyChange);
+			}
+			
+			private function onPropertyChange(event:PropertyChangeEvent):void {
+				if (event.property == "selectedMenu") {
+					this._selectedMenuItem = model.selectedMenu;
+				}
+			}
+			
+			private function initBulletin():void {
+				var evt:PcBulletinEvent = new PcBulletinEvent(PcBulletinEvent.GET_BULLETIN_LIST);
+				evt.page = new PageHelperVo();
+				evt.successCallback = onGetBulletinSuccess;
+				evt.dispatch();				
+			}			
+			
+			private function onGetBulletinSuccess(data:Object, evt:PcBulletinEvent):void {
+				if (!data) return;
+				
+				var pageResult:PageResultVo = data as PageResultVo;
+				if (!pageResult) {
+					return;
+				}
+				model.bulletinCollection = pageResult.list;				
+				
+				
+				var startTimer:Timer = new Timer(10000, 1);
+				startTimer.addEventListener(TimerEvent.TIMER_COMPLETE, onStartTimerCompleted);
+				startTimer.start();				
+				
+			}			
+			
+			private function onStartTimerCompleted(event:TimerEvent):void {
+				this.includeInLayout = true;
+				startScroll();
+			}
+			
+			private var isTxtMouseOver:Boolean;
+			
+			private function onTxtMouseOver(event:MouseEvent):void {
+				isTxtMouseOver = true;
+			}
+			
+			private function onTxtMouseOut(event:MouseEvent):void {
+				isTxtMouseOver = false;
+			}
+			
+			private var _txt:Text;
+			
+			public function startScroll():void {
+				this._txt.htmlText = getContent();
+				if (!this._txt.htmlText || this._txt.htmlText == "") {
+					return;
+				}
+				this._moveIn.play();
+			}
+			
+			private function onTimer(event:TimerEvent):void {
+				if (isTxtMouseOver) {
+					return;
+				}
+				this._moveOut.play();
+				stopTimer.stop();
+			}
+			
+			public function onMoveInEffectEnd(event:EffectEvent):void {
+				if (!stopTimer) {
+					stopTimer = new Timer(10000);
+					stopTimer.addEventListener(TimerEvent.TIMER, onTimer);
+				}
+				stopTimer.start();
+			}
+			
+			public function onMoveOutEffectEnd(event:EffectEvent):void {
+				this._txt.x = this.width;
+				startScroll();
+			}
+			
+			private var currentItemIndex:Number;
+			private function getContent():String {
+				if (!model.bulletinCollection || model.bulletinCollection.length == 0) {
+					return "";
+				}
+				if (!currentItemIndex || currentItemIndex == model.bulletinCollection.length) {
+					currentItemIndex = 0;
+				}
+				var vo:PcBulletinVo = model.bulletinCollection.getItemAt(currentItemIndex++) as PcBulletinVo;
+				var message:String = vo.title;
+				return '<a href="event:' + currentItemIndex + '">' + message + '</a>';
+			}
+			
+			private var _moveIn:Move;
+			public function get moveIn():Move {
+				return this._moveIn;
+			}
+			public function set moveIn(value:Move):void {
+				this._moveIn = value;
+			}
+			
+			private var _moveOut:Move;
+			public function get moveOut():Move {
+				return this._moveOut;
+			}
+			public function set moveOut(value:Move):void {
+				this._moveOut = value;
+			}
+			
+			private function onTxtLink(event:TextEvent):void {
+				var index:int = currentItemIndex-1;
+				var vo:PcBulletinVo = model.bulletinCollection.getItemAt(index) as PcBulletinVo;
+				var win:PcBulletinViewWindow = new PcBulletinViewWindow();
+				win.bulletinVo = vo;
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+//			private var infoList:ArrayCollection = new ArrayCollection([
+//				{id:1, message:"2011年-年度计划未填写！"},
+//				{id:2, message:"2011年-第一季度度计划未填写！"},
+//			]);
+			
+			override protected function updateDisplayList(unscaledWidth:Number, unscaledHeight:Number):void {
+				super.updateDisplayList(unscaledWidth, unscaledHeight);
+			}
+			
+			
+			private function onLogout(event:TextEvent):void {
+				var userEvt:PcUserEvent = new PcUserEvent(PcUserEvent.LOGOUT);
+				userEvt.failureCallback = onLogoutFailure;
+				userEvt.dispatch();
+			}
+			
+			private function onLogoutFailure(info:Object, evt:PcUserEvent):void {
+				Alert.show(info.toString());
+			}
+			
+			private function updatePwHandler(event:TextEvent):void {
+				var win:PwEditWindow = new PwEditWindow();
+				PopupMgr.instance.popupWindow(win);
+			}
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:Canvas width="100%" height="{totalHeight}" bottom="{scrollBarHeight}">
+		<mx:Canvas width="100%" height="{mHeight}">
+			<mx:HBox width="100%" height="100%" borderStyle="solid"  
+					 horizontalAlign="center" verticalAlign="middle"
+					 horizontalScrollPolicy="off" verticalScrollPolicy="off">
+				
+				<mx:ToggleButtonBar id="mainMenu" fontWeight="bold" height="100%"/>
+				<mx:VRule height="80%"/>
+				<mx:Canvas id="moveLblCav" width="100%" height="100%" borderStyle="none"
+						   borderVisible="false" horizontalScrollPolicy="off"
+						   verticalScrollPolicy="off"/>
+				<mx:HBox right="10" bottom="38" cornerRadius="5"
+						 backgroundColor="0xffffff" backgroundAlpha="1">
+					<mx:Label text="{'当前登录用户：' + (model.loginUser ? model.loginUser.username : '')}"
+							  fontWeight="bold"/>
+					<mx:Text htmlText="{updatePwTxt}" link="updatePwHandler(event)" fontWeight="bold"
+							 useHandCursor="true" buttonMode="true"/>
+					<mx:Text htmlText="{logoffTxt}" link="onLogout(event)" fontWeight="bold"
+							 useHandCursor="true" buttonMode="true"/>
+				</mx:HBox>
+			</mx:HBox>
+		</mx:Canvas>
+		<mx:Canvas id="allCanvas" top="{mHeight+2}" width="100%" height="{nHeight}" includeInLayout="false" visible="false"
+				   backgroundColor="0xefefef" borderStyle="solid" horizontalScrollPolicy="off">
+			<mx:VBox id="allHolder" width="100%" height="100%" paddingLeft="{130}">
+				
+			</mx:VBox>
+		</mx:Canvas>
+	</mx:Canvas>
+</mx:Canvas>

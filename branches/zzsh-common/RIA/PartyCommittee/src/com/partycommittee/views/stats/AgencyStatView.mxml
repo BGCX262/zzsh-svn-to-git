@@ -1,0 +1,155 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView  xmlns:fx="http://ns.adobe.com/mxml/2009" 
+							xmlns:s="library://ns.adobe.com/flex/spark" 
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							styleName="mainCanvas"
+							width="100%" height="100%" 
+							xmlns:button="com.partycommittee.control.button.*" 
+							xmlns:datagrid="com.partycommittee.control.datagrid.*"
+							xmlns:navigation="com.partycommittee.manager.navigation.*" 
+							xmlns:pagebar="com.partycommittee.control.pagebar.*"
+							creationComplete="onCreationCompleted()"
+							horizontalScrollPolicy="off"
+							verticalScrollPolicy="off">
+	
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.ExportExcel;
+			import com.partycommittee.events.PcStatEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.LblFunctionHelper;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.controls.DataGrid;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+			
+			[Bindable]
+			private var datas:ArrayCollection = new ArrayCollection();
+
+			private function onCreationCompleted():void {
+
+			}
+			
+			public function updateData():void {
+				if (model.isLeafUser) return;
+				if (model && model.focusAgencyVo) {
+					if (model.focusAgencyVo && model.focusAgencyVo.codeId == 10) {
+						// todo;
+					} else {
+						if (model.focusAgencyVo) {
+							var evt:PcStatEvent = new PcStatEvent(PcStatEvent.GET_AGENCY_STATS_BY_ID);
+							evt.agencyId = model.focusAgencyVo.id;
+							evt.successCallback = onGetAgencyStatSuccess;
+							evt.failureCallback = onGetAgencyStatFailure;
+							this.enabled = false;
+							evt.dispatch();
+						}
+					}
+				}
+			}
+			
+
+			private function onGetAgencyStatSuccess(data:Object, evt:PcStatEvent):void {
+				this.enabled = true;
+				if (!data) return;
+				datas.removeAll();
+				var dp:ArrayCollection = data as ArrayCollection;
+				
+				if (dp.length == 0) return;
+				var numericDataSort:Sort = new Sort(); 
+				var dataSortField:SortField = new SortField(); 
+				dataSortField.name = "code"; 
+//				dataSortField.numeric = true;
+				numericDataSort.fields = [dataSortField];
+				dp.sort = numericDataSort;
+				dp.refresh();	
+				
+				for(var i:int = 0; i<dp.length; i++) {
+					var vo:Object = dp.getItemAt(i);
+					if (i > 0 ) {
+						vo.name = "  " + vo.name; 
+					}
+					datas.addItem(vo);
+				}
+//				agencystatsDG.dataProvider = dp;
+			}
+			
+			private function onGetAgencyStatFailure(info:Object, evt:PcStatEvent):void {
+				this.enabled = true;
+			}			
+			
+			private function exportToExcel():void {
+				ExportExcel.loadDGInExcel(agencystatsDG,'excelExport.jsp', "基本情况统计表");
+			}
+			
+			private function indexLabelFunction(oItem:Object,iCol:int):String	{
+				var iIndex:int = datas.getItemIndex(oItem) + 1;
+				return String(iIndex);
+			}			
+			
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 horizontalScrollPolicy="auto" verticalScrollPolicy="auto">
+		<mx:HBox >
+			<mx:Button label="查看统计" click="updateData()"/>
+			<mx:Button label="导出到Excel" click="exportToExcel()"/>
+		</mx:HBox>		
+
+		<mx:AdvancedDataGrid id="agencystatsDG" designViewDataType="flat"   
+							 width="100%" height="100%" color="0x323232"  
+							 minWidth="640" minHeight="480" dataProvider="{datas}"
+							 sortableColumns="false" sortExpertMode="true"
+							 variableRowHeight="true"
+							 >  
+			<mx:groupedColumns>   
+				<mx:AdvancedDataGridColumn dataField="num" headerText="序号" labelFunction="indexLabelFunction" width="25" headerWordWrap="true" textAlign="center"/>
+				<mx:AdvancedDataGridColumn dataField="name" width="160" headerRenderer="com.partycommittee.renderers.headRenderer" textAlign="left" headerWordWrap="true" wordWrap="true"/>
+				<mx:AdvancedDataGridColumn dataField="ejdwNum" headerText="二级党委数量" width="40" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="dzjNum" headerText="党总支数量" width="40" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="dzbNum" headerText="党支部数量" width="40" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="more2yearNum" headerText="截止统计时间支部改选时间满两年的支部数" width="40" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="less7Num" headerText="党员人数不足7人的党支部数量" width="40" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="noFsjZbwyNum" headerText="只设支部书记未设支部副书记、支部委员的支部数量" width="40" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="dxzNum" headerText="党小组数量" width="40" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="dyNum" headerText="党员人数" width="40" headerWordWrap="true" textAlign="right"/>
+			
+			
+			<mx:AdvancedDataGridColumnGroup headerText="支委会组成情况统计" headerWordWrap="true">  
+				<mx:AdvancedDataGridColumn dataField="zbsjNum" headerText="支部书记数" width="30" headerWordWrap="true" textAlign="right" />
+				<mx:AdvancedDataGridColumn dataField="zbfsjNum" headerText="支部副书记数" width="30" headerWordWrap="true" textAlign="right"/>  
+				<mx:AdvancedDataGridColumn dataField="zzwyNum" headerText="组织委员数" width="30" headerWordWrap="true" textAlign="right"/>  
+				<mx:AdvancedDataGridColumn dataField="xcwyNum" headerText="宣传委员数" width="30" headerWordWrap="true" textAlign="right"/>  
+				<mx:AdvancedDataGridColumn dataField="jjwyNum" headerText="纪检委员数" width="30" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="qnwyNum" headerText="青年委员数" width="30" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="ghwyNum" headerText="工会委员数" width="30" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="fnwyNum" headerText="妇女委员数" width="30" headerWordWrap="true" textAlign="right"/>
+				<mx:AdvancedDataGridColumn dataField="bmwyNum" headerText="保密委员数" width="30" headerWordWrap="true" textAlign="right"/>
+			</mx:AdvancedDataGridColumnGroup>			
+			</mx:groupedColumns>  
+		</mx:AdvancedDataGrid>
+		
+		
+	</mx:VBox>
+	
+</navigation:NavigationView>

@@ -1,0 +1,123 @@
+<?xml version="1.0" encoding="utf-8"?>
+<mx:HBox xmlns:fx="http://ns.adobe.com/mxml/2009" 
+		 xmlns:s="library://ns.adobe.com/flex/spark" 
+		 xmlns:mx="library://ns.adobe.com/flex/mx" 
+		 height="100%" 
+		 xmlns:button="com.partycommittee.control.button.*"
+		 creationComplete="onCreationCompleted()">
+	<fx:Script>
+		<![CDATA[
+			import com.partycommittee.events.PcMemberEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.vo.PcMeetingVo;
+			import com.partycommittee.vo.PcMemberVo;
+			
+			import mx.collections.ArrayCollection;
+			import mx.controls.Alert;
+			
+			private var isNew:Boolean = false;
+			
+			[Bindable]
+			public var editable:Boolean = true;
+			
+			private var _meeting:PcMeetingVo;
+			[Bindable]
+			public function get meeting():PcMeetingVo {
+				return this._meeting;
+			}
+			public function set meeting(value:PcMeetingVo):void {
+				this._meeting = value;
+			}
+			
+			private var _memberList:ArrayCollection;
+			[Bindable]
+			public function get memberList():ArrayCollection {
+				return this._memberList;
+			}
+			public function set memberList(value:ArrayCollection):void {
+				this._memberList = value;
+			}
+			
+			[Bindable]
+			public var asenceNumber:Number = 0;
+			
+			[Bindable]
+			private var asenceMemberNameStr:String = "";
+			
+			private function onCreationCompleted():void {
+				if (!this._meeting) {
+					return;
+				}
+				
+				if (this._meeting.id) {
+					isNew = false;
+					asenceNumber = this._meeting.asenceMemberIds ? this._meeting.asenceMemberIds.split(',').length : 0;
+				} else {
+					isNew = true;
+				}
+				getMembers();
+			}
+			
+			private function getMembers():void {
+				var pcMemberEvt:PcMemberEvent = new PcMemberEvent(PcMemberEvent.GET_MEMBERS_BY_AGENCYID);
+				pcMemberEvt.agencyId = this._meeting.agencyId;
+				pcMemberEvt.successCallback = onGetMembersSuccess;
+				pcMemberEvt.failureCallback = onGetMembersFailure;
+				this.enabled = false;
+				pcMemberEvt.dispatch();
+			}
+			
+			private function onGetMembersSuccess(data:Object, evt:PcMemberEvent):void {
+				this.enabled = true;
+				this.memberList = data as ArrayCollection;
+				if (!isNew) {
+					if (!meeting.asenceMemberIds || meeting.asenceMemberIds == "") {
+						return;
+					}
+					var asenceMemberArry:Array = meeting.asenceMemberIds.split(',');
+					var asenceMembers:ArrayCollection = new ArrayCollection();
+					for each (var memberItem:PcMemberVo in memberList) {
+						if (asenceMemberArry.indexOf(memberItem.id + "") != -1) {
+							asenceMembers.addItem(memberItem);
+						}
+					}
+					setAsenceMembers(asenceMembers);
+				}
+			}
+			
+			private function onGetMembersFailure(data:Object, evt:PcMemberEvent):void {
+				this.enabled = true;
+				Alert.show("读取支委委员列表失败！");
+			}
+			
+			private function onChooseBtnClick():void {
+				var win:ChooseAsenceWindow = new ChooseAsenceWindow();
+				win.parentView = this;
+				if (this._meeting && this._meeting.asenceMemberIds) {
+					win.asenceIds = this._meeting.asenceMemberIds.split(",");
+				} else {
+					win.asenceIds = new Array();
+				}
+				PopupMgr.instance.popupWindow(win);
+			}
+			
+			public function setAsenceMembers(asenceMembers:ArrayCollection):void {
+				var asenceMemberNames:Array = new Array();
+				var asenceMemberIds:Array = new Array();
+				for each (var asenceItem:PcMemberVo in asenceMembers) {
+					asenceMemberNames.push(asenceItem.name);
+					asenceMemberIds.push(asenceItem.id);
+				}
+				this.asenceNumber = asenceMemberIds.length;
+				this._meeting.asenceMemberIds = asenceMemberIds.join(',');
+				asenceMemberNameStr = asenceMemberNames.join(",");
+			}
+		]]>
+	</fx:Script>
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:TextInput editable="false" width="100%" text="{asenceMemberNameStr}"/>
+	<button:PcButton label="选择..." click="onChooseBtnClick()" enabled="{editable}"/>
+</mx:HBox>

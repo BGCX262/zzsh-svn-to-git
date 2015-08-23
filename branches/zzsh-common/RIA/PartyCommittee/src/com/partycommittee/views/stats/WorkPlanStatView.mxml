@@ -1,0 +1,393 @@
+<?xml version="1.0" encoding="utf-8"?>
+<navigation:NavigationView  xmlns:fx="http://ns.adobe.com/mxml/2009" 
+							xmlns:s="library://ns.adobe.com/flex/spark" 
+							xmlns:mx="library://ns.adobe.com/flex/mx"
+							styleName="mainCanvas"
+							width="100%" height="100%" 
+							xmlns:button="com.partycommittee.control.button.*" 
+							xmlns:datagrid="com.partycommittee.control.datagrid.*"
+							xmlns:navigation="com.partycommittee.manager.navigation.*" 
+							xmlns:pagebar="com.partycommittee.control.pagebar.*"
+							creationComplete="onCreationCompleted()"
+							horizontalScrollPolicy="off"
+							verticalScrollPolicy="off">							
+	
+	<fx:Script>
+		<![CDATA[
+			import com.lnczx.utils.ExportExcel;
+			import com.lnczx.utils.ExportExcelExtend;
+			import com.partycommittee.events.PcParentStatEvent;
+			import com.partycommittee.events.PcStatEvent;
+			import com.partycommittee.manager.popup.PopupMgr;
+			import com.partycommittee.model.ModelLocator;
+			import com.partycommittee.util.CRUDEventType;
+			import com.partycommittee.util.DataproviderFactory;
+			import com.partycommittee.util.LblFunctionHelper;
+			
+			import mx.collections.ArrayCollection;
+			import mx.collections.Sort;
+			import mx.collections.SortField;
+			import mx.containers.TabNavigator;
+			import mx.controls.Alert;
+			import mx.controls.DataGrid;
+			import mx.core.FlexGlobals;
+			import mx.events.CloseEvent;
+			import mx.events.PropertyChangeEvent;
+			import mx.managers.PopUpManager;
+			
+			public var tab:TabNavigator;
+			
+			[Bindable]
+			private var model:ModelLocator = ModelLocator.getInstance();
+
+			private var datas:ArrayCollection = new ArrayCollection();			
+			
+			private function onCreationCompleted():void {
+				if (yearCmb) {
+					yearCmb.dataProvider = DataproviderFactory.getRangeYearForReport();
+					yearCmb.selectedItem = model.reportYear = new Date().getFullYear();
+				}
+				
+				if (startMonthCmb) {
+					startMonthCmb.dataProvider = createMonthDp();
+					startMonthCmb.selectedIndex = 0;
+				}	
+				
+				if (endMonthCmb) {
+					endMonthCmb.dataProvider = createMonthDp();
+					endMonthCmb.selectedIndex = new Date().getMonth();
+				}				
+
+			}
+			
+			private function createMonthDp():ArrayCollection {
+				var monthCollection:ArrayCollection = new ArrayCollection();
+				for (var i:Number = 1; i <= 12; i++) {
+					monthCollection.addItem(i);
+				}
+				return monthCollection;
+			}			
+			
+
+			public function updateData():void {
+				if (model.isLeafUser) return;
+				if (model && model.focusAgencyVo) {
+					if (model.focusAgencyVo && model.focusAgencyVo.codeId == 10) {
+						// todo;
+					} else {
+						if (model.focusAgencyVo) {
+							var evt:PcStatEvent = new PcStatEvent(PcStatEvent.GET_WORKPLAN_STATS_BY_ID);
+							evt.agencyId = model.focusAgencyVo.id;
+							evt.year = yearCmb.selectedItem as Number;
+							evt.startMonth = startMonthCmb.selectedItem as Number;
+							evt.endMonth = endMonthCmb.selectedItem as Number;
+							evt.successCallback = onGetStatSuccess;
+							evt.failureCallback = onGetStatFailure;
+							this.enabled = false;
+							evt.dispatch();
+						}
+					}
+				}					
+			}
+			
+			private function onGetStatSuccess(data:Object, evt:PcStatEvent):void {
+				this.enabled = true;
+				if (!data) return;
+				initDp(data as ArrayCollection);
+			}
+			
+			private function onGetStatFailure(info:Object, evt:PcStatEvent):void {
+				this.enabled = true;
+			}			
+						
+			
+			public function initDp(dp:ArrayCollection):void {
+				
+//				datas:ArrayCollection = new ArrayCollection();
+				datas.removeAll();
+				var tmpId:int = 0;
+				var vo:Object = new Object();
+				
+				var numericDataSort:Sort = new Sort();
+				var dataSortField:SortField = new SortField(); 
+				dataSortField.name = "code"; 
+//				dataSortField.numeric = true;
+				numericDataSort.fields = [dataSortField];
+				dp.sort = numericDataSort;
+				dp.refresh();
+				// 初始化数据
+				
+				for(var i:int = 0; i<dp.length; i++) {
+					if (tmpId == 0 ) {
+						vo = initObject();
+						
+						tmpId = dp.getItemAt(i).agencyId;
+					} else	if  (tmpId != dp.getItemAt(i).agencyId) {
+						datas.addItem(vo);
+						vo = initObject();
+						tmpId = dp.getItemAt(i).agencyId;
+					}
+					if (i < 5) {
+						vo.name = dp.getItemAt(i).name;	
+					} else {
+						vo.name = "    " + dp.getItemAt(i).name;
+					}
+					vo.agencyId = dp.getItemAt(i).agencyId;
+					vo.code = dp.getItemAt(i).code;
+					//年度计划
+					if (dp.getItemAt(i).typeId == 1) {
+						vo.y_reported_rate = dp.getItemAt(i).reportedRate;
+						vo.y_agency_goodjob = dp.getItemAt(i).agencyGoodjob;
+						vo.y_return_rate = dp.getItemAt(i).returnRate;
+						vo.y_delay_rate = dp.getItemAt(i).delayRate;
+						vo.y_eva_rate = dp.getItemAt(i).evaRate;
+						vo.y_eva_1_rate = dp.getItemAt(i).eva1Rate;
+						vo.y_eva_2_rate = dp.getItemAt(i).eva2Rate;
+						vo.y_eva_3_rate = dp.getItemAt(i).eva3Rate;
+						vo.y_eva_4_rate = dp.getItemAt(i).eva4Rate;
+					}
+					
+					//季度计划
+					if (dp.getItemAt(i).typeId == 2) {
+						vo.q_reported_rate = dp.getItemAt(i).reportedRate;
+						vo.q_agency_goodjob = dp.getItemAt(i).agencyGoodjob;
+						vo.q_return_rate = dp.getItemAt(i).returnRate;
+						vo.q_delay_rate = dp.getItemAt(i).delayRate;
+						vo.q_eva_rate = dp.getItemAt(i).evaRate;
+						vo.q_eva_1_rate = dp.getItemAt(i).eva1Rate;
+						vo.q_eva_2_rate = dp.getItemAt(i).eva2Rate;
+						vo.q_eva_3_rate = dp.getItemAt(i).eva3Rate;
+						vo.q_eva_4_rate = dp.getItemAt(i).eva4Rate;
+					}		
+					
+					//季度执行情况
+					if (dp.getItemAt(i).typeId == 3) {
+						vo.qz_reported_rate = dp.getItemAt(i).reportedRate;
+						vo.qz_agency_goodjob = dp.getItemAt(i).agencyGoodjob;
+						vo.qz_return_rate = dp.getItemAt(i).returnRate;
+						vo.qz_delay_rate = dp.getItemAt(i).delayRate;
+						vo.qz_eva_rate = dp.getItemAt(i).evaRate;
+						vo.qz_eva_1_rate = dp.getItemAt(i).eva1Rate;
+						vo.qz_eva_2_rate = dp.getItemAt(i).eva2Rate;
+						vo.qz_eva_3_rate = dp.getItemAt(i).eva3Rate;
+						vo.qz_eva_4_rate = dp.getItemAt(i).eva4Rate;
+					}
+					
+					//年终总结
+					if (dp.getItemAt(i).typeId == 4) {
+						vo.yz_reported_rate = dp.getItemAt(i).reportedRate;
+						vo.yz_agency_goodjob = dp.getItemAt(i).agencyGoodjob;
+						vo.yz_return_rate = dp.getItemAt(i).returnRate;
+						vo.yz_delay_rate = dp.getItemAt(i).delayRate;
+						vo.yz_eva_rate = dp.getItemAt(i).evaRate;
+						vo.yz_eva_1_rate = dp.getItemAt(i).eva1Rate;
+						vo.yz_eva_2_rate = dp.getItemAt(i).eva2Rate;
+						vo.yz_eva_3_rate = dp.getItemAt(i).eva3Rate;
+						vo.yz_eva_4_rate = dp.getItemAt(i).eva4Rate;
+					}	
+					
+
+					if ( (i+1) == dp.length) {
+						datas.addItem(vo);
+					}
+					
+				}
+				
+//				var numericDataSort:Sort = new Sort();
+//				var dataSortField:SortField = new SortField(); 
+//				dataSortField.name = "code"; 
+//				//				dataSortField.numeric = true;
+//				numericDataSort.fields = [dataSortField];
+//				datas.sort = numericDataSort;
+//				datas.refresh();					
+				
+				workPlanStatsDG.dataProvider = datas;
+			}
+			
+			public function initObject():Object {
+				var vo:Object = new Object();
+					
+					vo.y_agency_goodjob = 0;
+					vo.y_reported_rate = 0;
+					vo.y_return_rate = 0;  
+					vo.y_delay_rate = 0;
+					vo.y_eva_rate = 0;
+					vo.y_eva_1_rate = 0;
+					vo.y_eva_2_rate = 0;
+					vo.y_eva_3_rate = 0;
+					vo.y_eva_4_rate = 0;
+					
+					vo.q_agency_goodjob = 0;
+					vo.q_reported_rate = 0;
+					vo.q_return_rate = 0;  
+					vo.q_delay_rate = 0;
+					vo.q_eva_rate = 0;
+					vo.q_eva_1_rate = 0;
+					vo.q_eva_2_rate = 0;
+					vo.q_eva_3_rate = 0;
+					vo.q_eva_4_rate = 0;	
+					
+					vo.qz_agency_goodjob = 0;
+					vo.qz_reported_rate = 0;
+					vo.qz_return_rate = 0;  
+					vo.qz_delay_rate = 0;
+					vo.qz_eva_rate = 0;
+					vo.qz_eva_1_rate = 0;
+					vo.qz_eva_2_rate = 0;
+					vo.qz_eva_3_rate = 0;
+					vo.qz_eva_4_rate = 0;		
+					
+					vo.yz_agency_goodjob = 0;
+					vo.yz_reported_rate = 0;
+					vo.yz_return_rate = 0;  
+					vo.yz_delay_rate = 0;
+					vo.yz_eva_rate = 0;
+					vo.yz_eva_1_rate = 0;
+					vo.yz_eva_2_rate = 0;
+					vo.yz_eva_3_rate = 0;
+					vo.yz_eva_4_rate = 0;					
+				
+				return vo;
+			}			
+			
+			private function exportToExcel():void {
+				ExportExcelExtend.loadDGInExcel(workPlanStatsDG,'excelExport.jsp', "工作计划统计表");
+			}
+			
+			private function indexLabelFunction(oItem:Object,iCol:int):String	{
+				var iIndex:int = datas.getItemIndex(oItem) + 1;
+				return String(iIndex);
+			}		
+			
+			public function exportZBToExcel():void {
+				if (model.isLeafUser) return;
+				if (model && model.focusAgencyVo) {
+					if (model.focusAgencyVo && model.focusAgencyVo.codeId == 10) {
+						// todo;
+					} else {
+						if (model.focusAgencyVo) {
+							var evt:PcStatEvent = new PcStatEvent(PcStatEvent.GET_WORKPLAN_ZBSTATS_BY_ID);
+							evt.agencyId = model.focusAgencyVo.id;
+							evt.year = yearCmb.selectedItem as Number;
+							evt.startMonth = startMonthCmb.selectedItem as Number;
+							evt.endMonth = endMonthCmb.selectedItem as Number;
+							evt.successCallback = onGetZBStatSuccess;
+							evt.failureCallback = onGetZBStatFailure;
+							this.enabled = false;
+							evt.dispatch();
+						}
+					}
+				}					
+			}			
+			
+			private function onGetZBStatSuccess(data:Object, evt:PcStatEvent):void {
+				this.enabled = true;
+				
+				var filename = data as String;
+				var url = 'tmp/' + filename;
+				var u:URLRequest = new URLRequest(url);
+				u.method = URLRequestMethod.GET;   
+				navigateToURL(u,"_self");				
+			}
+			
+			private function onGetZBStatFailure(info:Object, evt:PcStatEvent):void {
+				this.enabled = true;
+			}				
+
+		]]>
+	</fx:Script>
+	
+	<fx:Declarations>
+		<!-- Place non-visual elements (e.g., services, value objects) here -->
+	</fx:Declarations>
+	
+	<mx:VBox width="100%" height="100%"
+			 horizontalScrollPolicy="auto" verticalScrollPolicy="off">
+		<mx:HBox >		
+			<mx:Label text="选择年份:"/>
+			<mx:ComboBox id="yearCmb"/>
+			<mx:Label text="开始月份:"/>
+			<mx:ComboBox id="startMonthCmb" />
+			<mx:Label text="结束月份:"/>
+			<mx:ComboBox id="endMonthCmb" />
+			<mx:Button label="查看统计" click="updateData()"/>
+			<mx:Button label="导出到Excel" click="exportToExcel()"/>
+			<mx:Button label="导出支部数据到Excel" click="exportZBToExcel()" visible="{ (model.loginUser.id  == 1) ? true : false}"/>
+		</mx:HBox>		
+
+		<mx:AdvancedDataGrid id="workPlanStatsDG" designViewDataType="flat" 
+							 horizontalScrollPolicy="auto"
+							 verticalScrollPolicy="auto"
+							 width="100%" height="100%" color="0x323232"  
+							 sortableColumns="false" sortExpertMode="true"
+							 variableRowHeight="true"
+							 lockedColumnCount="2"
+							 >  
+			<mx:groupedColumns>   
+				<mx:AdvancedDataGridColumn dataField="num" headerText="序号" labelFunction="indexLabelFunction" width="25" headerWordWrap="true" textAlign="center"/>
+				<mx:AdvancedDataGridColumn dataField="name" width="160" headerRenderer="com.partycommittee.renderers.headRenderer" textAlign="left" headerWordWrap="true" wordWrap="true"/>
+				
+			
+				<mx:AdvancedDataGridColumnGroup headerText="年度计划" headerWordWrap="true">  
+					<mx:AdvancedDataGridColumn dataField="y_reported_rate" headerText="规范报送率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+					<mx:AdvancedDataGridColumn dataField="y_agency_goodjob" headerText="规范报送支部数" width="50" headerWordWrap="true" textAlign="right" />
+					<mx:AdvancedDataGridColumn dataField="y_return_rate" headerText="驳回后上报率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>  
+					<mx:AdvancedDataGridColumn dataField="y_delay_rate" headerText="逾期授权后上报率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					<mx:AdvancedDataGridColumn dataField="y_eva_rate" headerText="上级评价率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					<mx:AdvancedDataGridColumnGroup headerText="评价等次分布率" headerWordWrap="true"> 
+						<mx:AdvancedDataGridColumn dataField="y_eva_1_rate" headerText="好" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+						<mx:AdvancedDataGridColumn dataField="y_eva_2_rate" headerText="较好" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+						<mx:AdvancedDataGridColumn dataField="y_eva_3_rate" headerText="一般" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+						<mx:AdvancedDataGridColumn dataField="y_eva_4_rate" headerText="差" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+					</mx:AdvancedDataGridColumnGroup>
+				</mx:AdvancedDataGridColumnGroup>
+				
+				<mx:AdvancedDataGridColumnGroup headerText="季度计划" headerWordWrap="true">  
+					<mx:AdvancedDataGridColumn dataField="q_reported_rate" headerText="规范报送率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+					<mx:AdvancedDataGridColumn dataField="q_agency_goodjob" headerText="规范报送支部数" width="50" headerWordWrap="true" textAlign="right" />
+					<mx:AdvancedDataGridColumn dataField="q_return_rate" headerText="驳回后上报率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>  
+					<mx:AdvancedDataGridColumn dataField="q_delay_rate" headerText="逾期授权后上报率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					<mx:AdvancedDataGridColumn dataField="q_eva_rate" headerText="上级评价率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					<mx:AdvancedDataGridColumnGroup headerText="评价等次分布率" headerWordWrap="true"> 
+						<mx:AdvancedDataGridColumn dataField="q_eva_1_rate" headerText="好" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+						<mx:AdvancedDataGridColumn dataField="q_eva_2_rate" headerText="较好" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+						<mx:AdvancedDataGridColumn dataField="q_eva_3_rate" headerText="一般" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+						<mx:AdvancedDataGridColumn dataField="q_eva_4_rate" headerText="差" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+					</mx:AdvancedDataGridColumnGroup>
+				</mx:AdvancedDataGridColumnGroup>
+				
+				<mx:AdvancedDataGridColumnGroup headerText="季度执行情况" headerWordWrap="true">  
+					<mx:AdvancedDataGridColumn dataField="qz_reported_rate" headerText="规范报送率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+					<mx:AdvancedDataGridColumn dataField="qz_agency_goodjob" headerText="规范报送支部数" width="50" headerWordWrap="true" textAlign="right"/>
+					<mx:AdvancedDataGridColumn dataField="qz_return_rate" headerText="驳回后上报率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>  
+					<mx:AdvancedDataGridColumn dataField="qz_delay_rate" headerText="逾期授权后上报率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					<mx:AdvancedDataGridColumn dataField="qz_eva_rate" headerText="上级评价率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					<mx:AdvancedDataGridColumnGroup headerText="评价等次分布率" headerWordWrap="true"> 
+						<mx:AdvancedDataGridColumn dataField="qz_eva_1_rate" headerText="好" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+						<mx:AdvancedDataGridColumn dataField="qz_eva_2_rate" headerText="较好" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+						<mx:AdvancedDataGridColumn dataField="qz_eva_3_rate" headerText="一般" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer" />
+						<mx:AdvancedDataGridColumn dataField="qz_eva_4_rate" headerText="差" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					</mx:AdvancedDataGridColumnGroup>
+				</mx:AdvancedDataGridColumnGroup>
+				
+				<mx:AdvancedDataGridColumnGroup headerText="年终总结" headerWordWrap="true">  
+					<mx:AdvancedDataGridColumn dataField="yz_reported_rate" headerText="规范报送率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					<mx:AdvancedDataGridColumn dataField="yz_agency_goodjob" headerText="规范报送支部数" width="50" headerWordWrap="true" textAlign="right"/>
+					<mx:AdvancedDataGridColumn dataField="yz_return_rate" headerText="驳回后上报率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>  
+					<mx:AdvancedDataGridColumn dataField="yz_delay_rate" headerText="逾期授权后上报率" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					<mx:AdvancedDataGridColumn dataField="yz_eva_rate" headerText="上级评价率" width="50" headerWordWrap="true" textAlign="right" />
+					<mx:AdvancedDataGridColumnGroup headerText="评价等次分布率" headerWordWrap="true"> 
+						<mx:AdvancedDataGridColumn dataField="yz_eva_1_rate" headerText="好" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+						<mx:AdvancedDataGridColumn dataField="yz_eva_2_rate" headerText="较好" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+						<mx:AdvancedDataGridColumn dataField="yz_eva_3_rate" headerText="一般" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+						<mx:AdvancedDataGridColumn dataField="yz_eva_4_rate" headerText="差" width="50" headerWordWrap="true" textAlign="right" itemRenderer="com.partycommittee.renderers.DataGridPercentRenderer"/>
+					</mx:AdvancedDataGridColumnGroup>
+				</mx:AdvancedDataGridColumnGroup>	
+				
+			</mx:groupedColumns>  
+		</mx:AdvancedDataGrid>
+		
+		
+	</mx:VBox>
+	
+</navigation:NavigationView>
